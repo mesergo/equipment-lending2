@@ -73,7 +73,12 @@ if (fs.existsSync(path.join(DIST_DIR, 'index.html'))) {
   console.log(`Serving built frontend from ${DIST_DIR}`);
 }
 
-const PORT = Number(process.env.PORT) || Number(process.env.AUTH_SERVER_PORT) || 4001;
+// AUTH_SERVER_PORT wins when set (local dev, .env) — otherwise falls back to PORT (shared
+// hosts like cPanel/Passenger assign this) and finally 4001. AUTH_SERVER_PORT first, not
+// PORT first: this app runs as two local processes (Vite client + this API server), and a
+// launcher that injects a generic PORT env var to match the client's port would otherwise
+// make this server fight Vite for the same port instead of using its own.
+const PORT = Number(process.env.AUTH_SERVER_PORT) || Number(process.env.PORT) || 4001;
 
 getDb()
   .then(() => {
