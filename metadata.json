@@ -1,6 +1,0 @@
-{
-  "name": "חסד בריא - מערכת ניהול השאלת ציוד בבתי חולים",
-  "description": "מערכת דיגיטלית חכמה לעמותות חסד להשאלת ציוד רפואי, עזרי שיקום וערכות שהייה למאושפזים ולמלווים בבתי החולים.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

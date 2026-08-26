@@ -1,241 +1,226 @@
-# PRD: מיגרציה ל-MongoDB + השלמת פערי המערכת (equipment-lending)
+# PRD: בניית equipment-lending מחדש — לפי lendingCRM (ptdev1.message.co.il/admin) בלבד
 
 ## 1. מבוא
 
-הפרויקט הוא מערכת השאלת ציוד רפואי (מיטות, מזרנים וכו') לעמותות. קיים כבר שלד React
-מלא (`src/`) עם שרת Express קטן (`server/`) שמשתמש כרגע באחסון קבצי JSON
-(`server/data/*.json`, דרך `server/store.ts` / `server/ordersStore.ts` /
-`server/genericStore.ts`) כתחליף זמני ל-MongoDB. המטרה: להעביר את כל ה-persistence
-בפועל ל-MongoDB, ובמקביל לסגור פערים אמיתיים שהתגלו בסריקת הקוד ובהשוואה מול המערכת
-הקיימת בפרודקשן (`lendingCRM`, ptdev1.message.co.il/admin).
+**החלטה:** הקוד הישן בפרויקט (שהגיע מ-AI Studio, מבוסס על מודל Product→Model→SKU
+משלו) **נמחק לגמרי**. הפרויקט נבנה מחדש מאפס, ומודל הנתונים/המסכים היחיד שלפיו
+בונים הוא המערכת החיה הקיימת ב-**https://ptdev1.message.co.il/admin** ("lendingCRM").
+לא משתמשים בהנחות/שמות/היררכיה מהקוד הישן שנמחק.
 
-השוואה מול המערכת החיה העלתה כמה פערי פיצ'רים/מודל (ראו §6 הערות טכניות) שכדאי להכריע
-עליהם *לפני* שכותבים את הראוטים הסופיים ל-Mongo, כדי לא לכתוב סכימה פעמיים.
+התשתית הטכנית (React + Express + MongoDB, Tailwind, auth עם JWT) נשארת כפי
+שהוקמה קודם — Atlas מחובר ועובד, `server/db.ts`/`createMongoStore` הם infra
+גנרי לא-תלוי-דומיין ונבנים מחדש באותו pattern.
 
-## 2. מטרות
+## 2. מודל הנתונים (מבוסס על סריקת ptdev1.message.co.il/admin בפועל)
 
-- כל ה-persistence עובר מקבצי JSON ל-MongoDB (users, orders, products, models,
-  branches, warehouses, equipment, customers) בלי לשנות את חוזה ה-API כלפי הפרונט.
-- סגירת שלושת פערי ה-persistence הקריטיים שאובחנו בקוד: מלאי (stock) מתעדכן היום רק
-  בזיכרון הדפדפן; ל-organizations/patientRequests/volunteers/sanitizationQueue אין
-  API בשרת בכלל.
-- הסרת קוד מת (7 קומפוננטות לגאסי לא מחוברות).
-- כל story קטן מספיק למחזור עבודה בודד (~10 דקות), בסדר תלויות (DB layer → routes →
-  קליינט), עם קריטריון "Typecheck passes" ולעיתים "Verify changes work in browser".
+היררכיית הקטלוג במערכת החיה (שימו לב: **הפוכה** משמות בקוד הישן שנמחק):
 
-## 3. User Stories
+```
+Organization (ארגון)
+  └─ Branch (סניף)
+  └─ Warehouse (מחסן)
+  └─ Category (קטגוריה)
+       └─ Model (דגם)               ← יש מחיר, תמונה
+            └─ Product (מוצר) = SKU בודד, ממוספר, עם סטטוס השאלה חי
+  └─ Customer (לקוח)
+  └─ User (משתמש, 3 תפקידים)
+  └─ Loan/השאלה                     ← מקשר Customer + Product + תאריכים + Payment
+  └─ Payment (תשלום)
+  └─ ActionLog (לוגי פעולות)         ← audit trail על שינויים בהשאלות
+```
 
-### שלב א' — תשתית Mongo
+### שדות לפי ישות (מהסריקה בפועל):
 
-#### US-001: ~~Docker Compose ל-MongoDB מקומי~~ — הוחלף ב-Atlas
-**סטטוס:** לא נדרש יותר. הוחלט להשתמש ב-MongoDB Atlas הקיים (פרויקט BOTWA, Cluster0)
-במקום MongoDB מקומי — Docker Desktop לא הצליח לעלות בסביבת האוטומציה (ראה
-progress.txt, Iteration 1), ובכל מקרה Atlas זמין וכבר מחובר. נוצר משתמש DB ייעודי
-`equipment_lending_app` (readWriteAnyDatabase, לא המשתמש המשותף `botwa`), ו-
-`MONGODB_URI` כבר מוגדר ב-`.env` המקומי (לא ב-git).
+- **Organization**: name, logo, phone, email, address, description, token
+  (מזהה ציבורי ב-URL, למשל `/catalog/<token>`)
+- **Branch**: organizationId, name, branchManagerName, recording (קובץ אודיו —
+  ראו §5 non-goals, לא ברור מה תפקידו)
+- **Warehouse**: organizationId, name, location, entryCode, accessInstructions,
+  capacity, recording
+- **Category**: organizationId, name, recording
+- **Model**: organizationId, categoryId, name, imageUrl, price, recording
+- **Product** (SKU): organizationId, modelId, warehouseId, name (כולל מספר
+  פריט, למשל "מס 309"), price, status (active/inactive), loanStatus
+  (not_loaned/loaned/returned), imageUrl
+- **Customer**: organizationId, firstName, lastName, idNumber (ת.ז),
+  mobilePhone, city, street, buildingNumber
+- **Loan**: organizationId, status (loaned/returned/not_returned/pending_review),
+  customerId, hospitalizedPatientName (שם מאושפז — טקסט חופשי, נפרד מ-Customer),
+  productId, loanDate, returnDate, paymentId, notes (טקסט חופשי + לוג פעולות
+  מוצג inline)
+- **Payment**: organizationId, customerId, wasCharged (bool), status,
+  chargeAmount, chargeReason, issueDate, date, clearingCompanyPaymentId,
+  lastCardDigits — **מודל נתונים בלבד, בלי אינטגרציה אמיתית מול חברת סליקה**
+  (המשתמש ימסור פרטי חברת הסליקה בהמשך — ראו §5)
+- **ActionLog**: organizationId, date, actionType, performedBy, loanId, notes
+- **User**: organizationId (ריק ל-super_admin), name, email, passwordHash,
+  role (`super_admin` | `org_manager` | `coordinator`), title
 
-- [x] MongoDB זמין ונגיש (Atlas, לא Docker) — 2026-08-26
+### הרשאות (לפי המערכת החיה):
+שלושה תפקידים (לא שניים כמו בקוד הישן): **מנהל ראשי** (super_admin, רואה הכל),
+**מנהל ארגון** (org_manager, מוגבל לארגון שלו), **סדרן** (coordinator —
+תפקיד תפעולי/שיבוץ בתוך ארגון, היקף הרשאות מדויק ייקבע ב-US-102 לפי מה שנצפה
+בממשק: כנראה יכול לראות/לעדכן השאלות אך לא CRUD על ישויות קטלוג).
 
-#### US-002: מודול חיבור Mongo (`server/db.ts`)
-**Description:** כמפתח, אני רוצה מודול יחיד שמנהל את חיבור ה-MongoDB (connect פעם
-אחת, caching), כדי שכל שאר קבצי ה-store ישתמשו בו בלי לשכפל לוגיקת חיבור.
+## 3. Non-Goals (מפורש, מחוץ להיקף כרגע)
 
-**Acceptance Criteria:**
-- [ ] `server/db.ts` מייצא `getDb(): Promise<Db>` שמתחבר לפי `MONGODB_URI`
-      (אין ברירת מחדל בקוד — `MONGODB_URI` חובה כעת, כמו `JWT_SECRET`; זריקת שגיאה
-      ברורה אם הוא חסר, לפי התבנית הקיימת ב-`server/auth.ts`) ומחזיר את אותו חיבור
-      בקריאות חוזרות
-- [x] `.env.example` מתעדכן עם `MONGODB_URI` — 2026-08-26
-- [x] `server/index.ts` מחכה ל-`getDb()` לפני `app.listen` (כשל חיבור עוצר את השרת עם
-      הודעה ברורה, לא נכשל בשקט מאוחר יותר) — 2026-08-26
-- [x] Typecheck passes (`npm run lint`) — 2026-08-26 (2 שגיאות קיימות-מראש ב-
-      `InventoryView.tsx`, לא קשורות לשינוי הזה, ראה US-012)
+- אינטגרציה אמיתית מול חברת סליקה — Payment הוא מודל נתונים בלבד; המשתמש
+  ימסור את הפרטים בהמשך
+- שכפול מדויק של שדה "הקלטה" (אודיו) על Branch/Warehouse/Category/Model —
+  לא ברור מהממשק מה תפקידו (IVR? נגישות?); Non-Goal עד לבירור מול המשתמש
+- WhatsApp reminders אמיתי (אפשר provider "console" כמו קודם אם/כשנגיע לזה)
+- AI-search בקטלוג (היה פיצ'ר בקוד הישן שנמחק — לא חלק מהמערכת החיה, לא
+  בונים אותו מחדש אלא אם יתבקש)
 
-### שלב ב' — מיגרציית ה-stores (תלוי ב-US-002)
+## 4. User Stories
 
-#### US-003: מיגרציית `server/store.ts` (users) ל-Mongo
-**Description:** כמפתח, אני רוצה ש-`readUsers`/`writeUsers`/`findUserByUsername`
-יעבדו מול קולקציית `users` ב-Mongo במקום `users.json`, בלי לשנות את החתימה כלפי
-הקוראים מעבר להפיכתם ל-async.
+### שלב א' — יסודות (types, auth, users)
 
-**Acceptance Criteria:**
-- [x] הפונקציות הופכות ל-async, קוראות/כותבות ל-collection `users` (unique index על
-      `username`, lowercase) — 2026-08-26
-- [x] כל הקוראים (`server/index.ts` login/me, `server/seed-users.ts`,
-      `server/setupRoutes.ts`) מעודכנים ל-`await` — 2026-08-26
-- [x] `npm run seed:users` יוצר משתמשים ב-Mongo (לא ב-JSON), ומסרב לרוץ שוב אם כבר יש
-      מסמכים בקולקציה — 2026-08-26 (נבדק: הרצה שנייה מסרבת בהצלחה)
-- [x] Typecheck passes; התחברות עובדת ידנית מול Atlas — 2026-08-26 (נבדק עם curl:
-      login מצליח, לא תלוי-רישיות (ADMIN==admin), וסיסמה שגויה נדחית)
-
-#### US-004: מיגרציית `server/ordersStore.ts` (orders) ל-Mongo
-**Description:** כמו US-003 אבל לקולקציית `orders`, כולל ה-seed הראשוני מ-
-`INITIAL_ORDERS`.
-
-**Acceptance Criteria:**
-- [x] `readOrders`/`createOrder`/`findOrder`/`updateOrder` הופכים ל-async מול
-      collection `orders` (unique index על `id`); seed חד-פעמי אם הקולקציה ריקה —
-      2026-08-26 (createOrder/updateOrder גם שודרגו לפעולות אטומיות ב-Mongo
-      במקום read-all/write-all, כדי לסגור את סיכון ה-race condition שצוין ב-§6)
-- [x] `server/ordersRoutes.ts` ו-`server/reminders.ts` מעודכנים ל-`await` — 2026-08-26
-- [x] Typecheck passes; יצירת הזמנה מהקטלוג ואישור החזרה עובדים end-to-end מול Mongo
-      — 2026-08-26 (נבדק בפועל: 3 ההזמנות הזרועות מ-INITIAL_ORDERS נטענות דרך
-      GET /orders; יצירת הזמנה חדשה מצליחה; יצירה כפולה עם אותו id נדחית עם 409;
-      PATCH מעדכן סטטוס בהצלחה; רשומת הבדיקה נוקתה מה-DB בסוף)
-
-#### US-005: מיגרציית `server/genericStore.ts` ל-Mongo (`createMongoStore`)
-**Description:** כמפתח, אני רוצה שה-factory הגנרי (שמשמש products/models/branches/
-warehouses/equipment/customers) יעבוד מול Mongo collections במקום קבצי JSON, בלי
-לשנות את הממשק (`readAll/find/create/update/remove`) מעבר להפיכתו ל-async.
+#### US-101: מודל הטיפוסים המלא (`src/types/index.ts`)
+**Description:** להגדיר מחדש את כל הטיפוסים ב-TypeScript לפי §2 לעיל — שום
+טיפוס לא מיובא/נשאר מהקוד הישן.
 
 **Acceptance Criteria:**
-- [x] `createMongoStore<T>(collectionName, seed)` מחליף את `createJsonStore` — אותה
-      חתימה (בלי `writeAll` שלא נצרך חיצונית), async; seed חד-פעמי אם הקולקציה
-      ריקה; unique index על `id` — 2026-08-26
-- [x] פרוייקציה `{_id: 0}` בקריאות כדי לא לדלוף `_id` של Mongo לפרונט — 2026-08-26
-- [x] `server/catalogRoutes.ts` מעודכן במלואו ל-`await` (כולל `makeCrud` הגנרי
-      ו-`warehousesStore` המיוצא שנצרך מ-`ordersRoutes.ts`) — 2026-08-26
-      (`ordersRoutes.ts`: `resolveOrgId`/`canAccessOrder` הפכו async, וה-GET
-      /orders route עודכן להריץ resolveOrgId על כל ההזמנות עם Promise.all
-      במקום Array.filter הסינכרוני שהיה)
-- [x] Typecheck passes; קטלוג נטען, CRUD על ציוד/מוצר/דגם/סניף/מחסן/לקוח עובד מול
-      הממשק — 2026-08-26 (נבדק בפועל מול Atlas: GET לכל 5 סוגי הרשימות מחזיר את
-      הנתונים הזרועים; מחזור CRUD מלא — create/patch/delete — נבדק על branches
-      ו-equipment; customers/lookup ו-customers המוגן ב-auth גם נבדקו)
+- [x] קובץ `src/types/index.ts` חדש עם כל 11 הישויות מ-§2, שדות תואמים במדויק
+      — 2026-08-26
+- [x] Typecheck passes — 2026-08-26
 
-#### US-006: ניקוי — קבצי JSON ישנים
-**Description:** אחרי שכל ה-stores עוברים ל-Mongo, אני רוצה לוודא שאין יותר קוד
-שקורא/כותב ל-`server/data/*.json`.
+#### US-102: תשתית auth עם 3 תפקידים
+**Description:** לבנות מחדש `server/db.ts` (זהה ל-infra הקודם), `server/auth.ts`
+(JWT, אבל `role` כולל `coordinator`), `server/store.ts` (users ב-Mongo),
+`server/seed-users.ts` (חשבונות התחלתיים: super_admin אחד + org_manager
+וגם coordinator לארגון דוגמה אחד).
 
 **Acceptance Criteria:**
-- [ ] גרפ חיפוש (`fs.readFileSync`/`writeFileSync` עם `server/data`) לא מחזיר תוצאות
-      מחוץ ל-git history
-- [ ] קבצי ה-JSON עצמם נשארים במקום (כבר ב-gitignore, לא בשימוש) — לא נמחקים
-- [ ] README מתעדכן: מוסר התיאור "JSON-file-now, MongoDB-later", מוחלף בהוראות
-      MongoDB בפועל (docker compose, `MONGODB_URI`)
-- [ ] Typecheck passes
+- [ ] `AuthTokenPayload.role` הוא `'super_admin' | 'org_manager' | 'coordinator'`
+- [ ] `npm run seed:users` יוצר לפחות: super_admin, org_manager, coordinator
+- [ ] Typecheck passes; login+/me נבדק בפועל מול Atlas לכל שלושת התפקידים
 
-### שלב ג' — סגירת פערי persistence אמיתיים (תלוי בשלב ב')
+### שלב ב' — API לקטלוג (תלוי ב-US-101/102)
 
-#### US-007: מלאי (stock) נשמר בשרת, לא רק בזיכרון הדפדפן
-**Description:** כמנהל מערכת, אני רוצה שכמות המלאי הזמינה (`stockAvailable`) תתעדכן
-בשרת בפועל בזמן checkout/אישור החזרה, כדי שמצב המלאי לא יתבדר בין מכשירים/טאבים.
+#### US-103: API ל-Organizations
+**Acceptance Criteria:**
+- [ ] `createMongoStore<Organization>` + ראוטים: GET ציבורי (לצורך דף קטלוג
+      לפי token), POST/PATCH/DELETE ל-super_admin בלבד (ארגונים לא נוצרים
+      ע"י org_manager)
+- [ ] Typecheck passes; CRUD נבדק בפועל מול Atlas
+
+#### US-104: API ל-Branches, Warehouses, Categories, Models (קטלוג)
+**Description:** ארבע ישויות עם אותו pattern בדיוק (org-scoped CRUD) — story
+אחד כי הן זהות מבנית לחלוטין, ריבוי stories פה רק ייצור חזרתיות.
 
 **Acceptance Criteria:**
-- [ ] `POST /orders` מקטין אטומית `stockAvailable` של כל SKU בהזמנה (ב-Mongo, לא
-      בזיכרון קליינט)
-- [ ] `POST /orders/:id/confirm-return` מגדיל בחזרה את `stockAvailable`
-- [ ] `src/App.tsx` מפסיק לעדכן stock ב-state מקומי ומסתמך על הנתון שחוזר מהשרת
-- [ ] Typecheck passes; Verify changes work in browser — checkout שתי יחידות מאותו
-      SKU בשני טאבים מראה מלאי עקבי אחרי רענון
+- [ ] 4 stores + ראוטים, כל אחד עם GET ציבורי + CRUD מוגן (`canAccessOrg`)
+- [ ] Typecheck passes; CRUD נבדק בפועל על כל 4 הישויות מול Atlas
 
-#### US-008: API + Mongo store ל-Organizations
-**Description:** כמנהל-על, אני רוצה CRUD אמיתי לארגונים (כרגע רק ב-state מקומי),
-לפי אותו pattern שכבר קיים ל-products/branches וכו'.
+#### US-105: API ל-Products (SKU) — כולל `loanStatus`
+**Description:** כמו US-104 אך עם שדה `loanStatus` שמתעדכן אוטומטית ע"י
+מחזור ה-Loan (לא ניתן לעריכה ידנית חופשית מה-CRUD הגנרי — ייאכף ב-US-107).
 
 **Acceptance Criteria:**
-- [ ] `createMongoStore<Organization>('organizations', ORGANIZATIONS)` +
-      `GET /organizations` ציבורי, `POST/PATCH/DELETE` ל-super_admin בלבד
-- [ ] `App.tsx`: `handleAddOrganization` קורא ל-API במקום למוטט state מקומי בלבד
+- [ ] store + ראוטים ל-Products; `loanStatus` ברירת מחדל `not_loaned` ביצירה
+- [ ] Typecheck passes; CRUD בסיסי נבדק מול Atlas
+
+#### US-106: API ל-Customers
+**Acceptance Criteria:**
+- [ ] store + ראוטים org-scoped, כולל `GET /customers/lookup?phone=` ציבורי
+      (כמו במערכת החיה — מסך בקשת השאלה מזהה לקוח חוזר לפי טלפון)
+- [ ] Typecheck passes; CRUD + lookup נבדקים מול Atlas
+
+### שלב ג' — Loan (הליבה העסקית, תלוי בשלב ב')
+
+#### US-107: API ל-Loans — כולל עדכון `loanStatus` אוטומטי + ActionLog
+**Description:** ה-story הכי קריטי: יצירת/עדכון Loan צריכה גם לעדכן את
+`Product.loanStatus` בהתאם (ליצור → `loaned`, בהחזרה → `returned`), וגם
+לכתוב שורה ל-ActionLog בכל שינוי — בדיוק כמו שנצפה בטופס עריכת ההשאלה
+במערכת החיה (הטקסט המתועד אוטומטית: "מנהל ארגון X עדכן... תאריך ... סטטוס").
+
+**Acceptance Criteria:**
+- [ ] store + ראוטים ל-Loans, org-scoped (super_admin רואה הכל)
+- [ ] יצירת Loan → Product.loanStatus הופך ל-`loaned` (atomic, לא race)
+- [ ] עדכון סטטוס ל-`returned` → Product.loanStatus חוזר ל-`not_loaned`
+- [ ] כל create/update על Loan כותב שורת ActionLog (performedBy מה-auth token)
+- [ ] Typecheck passes; מחזור מלא (יצירה→עדכון→החזרה) נבדק מול Atlas, כולל
+      וידוא ש-Product.loanStatus ו-ActionLog באמת השתנו כצפוי
+
+#### US-108: API ל-Payments (מודל נתונים בלבד)
+**Description:** CRUD רגיל, בלי שום קריאה אמיתית לחברת סליקה (Non-Goal, §3).
+
+**Acceptance Criteria:**
+- [ ] store + ראוטים org-scoped
+- [ ] Typecheck passes; CRUD נבדק מול Atlas
+
+#### US-109: API ל-ActionLog (קריאה בלבד כלפי לקוחות ה-API)
+**Description:** ActionLog נכתב רק פנימית (מ-US-107 ודומיו), אבל צריך endpoint
+לקריאה כדי שהאדמין יוכל להציג את הלוג (כמו מסך "לוגי פעולות" במערכת החיה).
+
+**Acceptance Criteria:**
+- [ ] `GET /action-logs` מוגן, org-scoped, ממוין מהחדש לישן
+- [ ] Typecheck passes; נבדק מול רשומות אמיתיות שנוצרו ב-US-107
+
+### שלב ד' — Frontend (תלוי בשלב ג')
+
+#### US-110: שלד אפליקציה + Auth + ניווט אדמין
+**Description:** `src/App.tsx`, `AuthContext`, מסך login, וה-sidebar הראשי
+(תואם למבנה התפריט שנצפה במערכת החיה: לוח בקרה, ארגונים, סניפים, מחסנים,
+קטגוריות, דגמים, מוצרים, לקוחות, השאלות, תשלומים, לוגי פעולות, משתמשים).
+
+**Acceptance Criteria:**
+- [ ] Login עובד, טוקן נשמר, ניווט מוצג לפי role (coordinator/org_manager לא
+      רואים "ארגונים")
 - [ ] Typecheck passes; Verify changes work in browser
 
-#### US-009: API + Mongo store ל-PatientRequests
-**Description:** כמו US-008, לבקשות ציוד ליד המיטה (`PatientRequest`).
+#### US-111: מסכי CRUD גנריים לטבלאות (ארגונים/סניפים/מחסנים/קטגוריות/דגמים/
+מוצרים/לקוחות)
+**Description:** קומפוננטת טבלה גנרית אחת (חיפוש, מיון, עריכה inline/מודל,
+מחיקה) שמוזנת קונפיגורציה לכל ישות — לא 7 קומפוננטות נפרדות כפולות, בדיוק
+כמו שה-backend כבר בנוי גנרית (US-104/105/106).
 
 **Acceptance Criteria:**
-- [ ] `createMongoStore<PatientRequest>` + ראוטים תואמי-הרשאות ל-`canAccessOrg`
-      (כמו customers)
-- [ ] `App.tsx`: `handleAddNewRequest`/`handleAssignVolunteerToRequest`/
-      `handleUpdatePatientRequestStatus` קוראים ל-API
+- [ ] קומפוננטת `EntityTable` גנרית + קונפיג לכל אחת מ-7 הישויות
+- [ ] Typecheck passes; Verify changes work in browser — CRUD מלא על לפחות
+      2 ישויות שונות נבדק ידנית בדפדפן
+
+#### US-112: מסך השאלות (Loans) — הליבה העסקית
+**Description:** מסך ייעודי (לא גנרי כמו US-111) כי יש לו לוגיקה מיוחדת:
+טאבים לפי סטטוס (הכל/מושאל/חזר/בבדיקה/לא הוחזר — כמו במערכת החיה), טופס
+עריכה עם קישור ל-Customer/Product/Payment, ותצוגת ה-ActionLog inline.
+
+**Acceptance Criteria:**
+- [ ] רשימת השאלות עם טאבי סינון לפי סטטוס
+- [ ] טופס עריכה: שינוי סטטוס באמת מעדכן Product.loanStatus (מוודאים בדפדפן,
+      לא רק שה-API עובד)
 - [ ] Typecheck passes; Verify changes work in browser
 
-#### US-010: API + Mongo store ל-Volunteers
-**Description:** כמו US-008/009, למתנדבים (`Volunteer`) — כרגע אין אפילו fetch
-ראשוני ב-`App.tsx`.
-
+#### US-113: מסך משתמשים (Users) + ניהול הרשאות
 **Acceptance Criteria:**
-- [ ] `createMongoStore<Volunteer>` + ראוטים org-scoped
-- [ ] `App.tsx` טוען מתנדבים בעליית האפליקציה ומחובר ל-CRUD קיים בממשק
+- [ ] רשימת משתמשים + יצירה/עריכה, כולל בחירת תפקיד מבין 3
 - [ ] Typecheck passes; Verify changes work in browser
 
-#### US-011: API + Mongo store ל-SanitizationLog
-**Description:** כמו לעיל, לתור החיטוי (`sanitizationQueue`).
+### שלב ה' — קטלוג ציבורי + זריעת נתונים
+
+#### US-114: דף קטלוג ציבורי לפי ארגון (עיצוב wizard לפי הרפרנס)
+**Description:** דף ציבורי (ללא login) לפי `token` הארגון — שלב-שלב, כרטיסי
+מוצר עם checkbox/תמונה/תיאור/מחיר, מיתוג לפי הארגון (לוגו/שם) — בדיוק כמו
+שהוגדר קודם ב-US-013 המקורי (רפרנס: אפליקציית AI Studio "שבת אחים - מערכת
+השאלת ציוד"). זה עדיין רלוונטי במלואו גם אחרי המחיקה — זה על העיצוב, לא על
+מודל הנתונים הישן.
 
 **Acceptance Criteria:**
-- [ ] `createMongoStore<SanitizationLog>` + ראוטים org-scoped
-- [ ] `App.tsx`: `handleAdvanceSanitizationStep`/`handleFinishSanitization` קוראים
-      ל-API
-- [ ] Typecheck passes; Verify changes work in browser
+- [ ] דף `/catalog/:token` טוען מוצרים זמינים (Product עם loanStatus=
+      not_loaned) לפי הארגון, בעיצוב wizard/כרטיסים כמו הרפרנס
+- [ ] Typecheck passes; Verify changes work in browser בשני ארגונים שונים
 
-### שלב ד' — ניקוי קוד מת (עצמאי, אפשר במקביל לשלב ג')
-
-#### US-012: הסרת קומפוננטות legacy לא מחוברות
-**Description:** כמפתח, אני רוצה להסיר 7 קומפוננטות שאינן מיובאות משום מקום
-(`InventoryView`, `ActiveLoansView`, `DashboardView`, `StatsBanner`, `VolunteersView`,
-`NewLoanModal`, `ReturnModal`, `LoanReceiptModal`) שעובדות מול מודל ישן (`LoanRecord`)
-שכבר הוחלף ב-`OrderRecord`.
+#### US-115: סקריפט זריעת דאטה לדוגמה (seed) לכל הישויות
+**Description:** כרגע רק users נזרעים. צריך seed גם לארגון דוגמה אחד מלא —
+סניף, מחסן, קטגוריה, דגם, כמה מוצרים, לקוח — כדי שאפשר יהיה לבדוק את כל
+המסכים עם נתונים אמיתיים בלי להזין הכל ידנית.
 
 **Acceptance Criteria:**
-- [ ] אימות חוזר עם grep שאף אחת מהקומפוננטות לא מיובאת לפני מחיקה
-- [ ] הקבצים נמחקים; אם `LoanRecord` נשאר לא-בשימוש לגמרי אחרי המחיקה — מוסר גם הוא
-      מ-`src/types/index.ts`
-- [ ] Typecheck passes
-
-### שלב ה' — עיצוב מסך ההשאלה הציבורי לפי ארגון (תלוי בשלב ב', עצמאי משלבים ג'/ד')
-
-#### US-013: עיצוב מחדש של מסך בחירת המוצר הציבורי (per-org) לפי רפרנס
-**Description:** כמנהל-על, אני רוצה שמסך הקטלוג/בחירת המוצר הציבורי (`CatalogStoreView`
-ו/או `PatientPortalView`) יעוצב מחדש בסגנון wizard מדורג עם מיתוג הארגון (לוגו,
-כותרת, "בס"ד" לארגונים דתיים) וכרטיסי מוצר עם checkbox/תמונה/תיאור/סכום פקדון —
-לפי הרפרנס העיצובי שסופק: אפליקציית AI Studio "שבת אחים - מערכת השאלת ציוד"
-(https://aistudio.google.com/apps/8fb78a2c-dcaa-4d35-9e99-3b11430ee826). **הבהרה:**
-זה רפרנס ויזואלי בלבד (screenshots) — לא מעתיקים קוד מהאפליקציה של אותו רפרנס,
-בונים מימוש עצמאי בהתאם למערכת העיצוב הקיימת שלנו (Tailwind, `Organization.color`/
-`logoIcon` הקיימים כבר במודל הנתונים).
-
-**Acceptance Criteria:**
-- [ ] כותרת עמוד עם לוגו/שם הארגון (מ-`Organization`) ואינדיקטור שלבים (progress
-      steps) בסגנון wizard, כמו ברפרנס
-- [ ] כרטיס מוצר: תמונה, שם+דגם, תיאור קצר, "סכום פיקדון: X₪", checkbox/רדיו לבחירה
-      מרובה
-- [ ] העיצוב עקבי בין הארגונים (כל ארגון עם ה-URL/קוד/לוגו/צבע שלו — התשתית הזו
-      כבר קיימת דרך `#org/<CODE>`, לא נדרש שינוי בניתוב עצמו)
-- [ ] Typecheck passes; Verify changes work in browser — נבדק לפחות בשני ארגונים
-      שונים (`#org/HESED`, `#org/LEV` וכו') כדי לוודא שהמיתוג באמת דינמי ולא הרדקוד
-
-## 4. Non-Goals (לא בתוכנית הזו)
-
-- אינטגרציה עם ספק WhatsApp אמיתי (נשאר `console` provider)
-- הוספת תפקיד "סדרן" (coordinator) למודל ההרשאות — פער שזוהה מול המערכת החיה, אך
-  דורש החלטת מוצר לפני מימוש (ראו §6)
-- הוספת שדות ת.ז/כתובת ל-Customer — אותו דבר, דורש החלטת מוצר (המודל הנוכחי נמנע
-  מזה במכוון)
-- שכפול "לוגי פעולות" (audit trail) של המערכת הישנה — תכונה משמעותית, ראויה ל-PRD
-  נפרד
-- שכפול ישות Payment/סליקה נפרדת מול חברת סליקה אמיתית — היקף גדול, PRD נפרד
-- פענוח מטרת שדה "הקלטה" (קובץ אודיו) שמופיע על סניפים/מחסנים/קטגוריות/דגמים
-  במערכת הישנה — לא ברור מהממשק, צריך לברר מול בעל המוצר לפני שמחליטים אם ואיך
-  לשכפל
+- [ ] `npm run seed:demo` (סקריפט חדש) יוצר ארגון דוגמה מלא בכל הישויות
+- [ ] אידמפוטנטי (מסרב לרוץ שוב אם כבר קיים)
+- [ ] נבדק בפועל: מריצים, ורואים את הנתונים בכל מסכי ה-UI
 
 ## 5. Progress Log
 
-ראו `progress.txt` — עדכון בסוף כל מחזור עבודה.
-
-## 6. הערות טכניות / פערים שזוהו מול המערכת החיה (ptdev1.message.co.il/admin)
-
-- **היררכיית קטלוג הפוכה בשמות**: מערכת חיה = קטגוריה → דגם (מחיר+תמונה) → מוצר
-  (SKU בודד, ממוספר, עם סטטוס השאלה חי). קוד מקומי = Product → Model → EquipmentItem.
-  המיפוי הישיר: local.Product ≈ live.קטגוריה (בערך), local.Model ≈ live.דגם,
-  local.EquipmentItem ≈ live.מוצר. לא שינוי בהיקף ה-PRD הזה, אבל נדרש בזמן כל שיחת
-  מוצר עתידית כדי לא להתבלבל בין "מוצר" בשתי המערכות.
-- **תפקיד "סדרן"**: במערכת החיה יש שלושה תפקידי משתמש (מנהל כללי/מנהל ארגון/סדרן),
-  מקומי יש רק שניים. סדרן נראה כמו role של dispatch/coordination — קרוב מושגית
-  ל-Volunteer אבל עם login. צריך החלטה: להרחיב את auth roles או להשאיר בגדר Volunteer.
-- **תשלומים**: מערכת חיה עוקבת אחרי סטטוס חיוב אמיתי מול חברת סליקה (מזהה עסקה,
-  ספרות אחרונות של כרטיס, תאריך חיוב, האם חויב). מקומי יש רק שדות hold בסיסיים על
-  ה-Order עצמו. פער אמיתי אם יש כוונה לחייב כרטיסי אשראי בפועל.
-- **audit trail**: מערכת חיה שומרת לוג פעולות מובנה (מי שינה מה, מתי, על איזו
-  השאלה) שגם מוצג inline בטופס עריכת ההשאלה עצמה. אין מקבילה מקומית.
-- **Customer**: מערכת חיה שומרת ת.ז + כתובת מלאה (רחוב/עיר/מספר בניין). הקוד המקומי
-  מנע את זה במכוון (ראו הערה ב-`Customer` type: "replaces address"). צריך החלטת
-  פרטיות/מוצר מודעת, לא רק "להוסיף שדות".
+ראו `progress.txt`.

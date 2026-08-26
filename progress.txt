@@ -3,143 +3,26 @@
 ## Learnings
 (הערות שיצטברו במהלך העבודה — דפוסים, מכשולים, הקשר שימושי)
 
-- הקוד הקיים כבר בנוי בדפוס "JSON-file-now, MongoDB-later" מכוון: server/store.ts,
-  server/ordersStore.ts, server/genericStore.ts כולם עוטפים store פשוט עם
-  readAll/find/create/update/remove (או ואריאציה). המיגרציה אמורה לשמור על אותו
-  ממשק כלפי הקוראים (routes), רק להפוך אותו ל-async ולהחליף את המימוש הפנימי.
-- server/catalogRoutes.ts מייצא warehousesStore כדי ש-ordersRoutes.ts יוכל לבדוק
-  organizationId של מחסן - לשים לב לזה במיגרציה של genericStore, שלא "ייעלם" export.
-- README.md הנוכחי לא מעודכן: טוען שequipment/warehouses עדיין client-only, אבל
-  בפועל הם כבר persisted (JSON). לתקן כחלק מ-US-006, לא לסמוך עליו כמקור אמת.
-- docker Desktop לא היה רץ כברירת מחדל בסביבת הפיתוח הזו - נדרש להריץ אותו לפני
-  docker compose up.
-
-## Iteration 1 — US-001 (Docker Compose ל-MongoDB מקומי)
-- מה נעשה: ניסיון להריץ את Docker Desktop אוטומטית (Start-Process) לפני כתיבת
-  docker-compose.yml, כדי לוודא ש-US-001 אכן ניתן לאימות מקצה-לקצה.
-- כשל: Docker Desktop.exe מופעל (Start-Process מחזיר הצלחה) אבל לא נשאר רץ -
-  אחרי המתנה (~110 שניות) `docker ps` עדיין נכשל, ו-`Get-Process` לא מוצא שום
-  תהליך docker. WSL2 עצמו תקין (Ubuntu default, version 2), אז זה לא חסם WSL.
-  כנראה שהפעלת Docker Desktop דורשת אינטראקציה גרפית (מסך פתיחה/אישור
-  ראשוני/הרשאות) שלא ניתן לעקוף אוטומטית מתוך כלי אוטומציה בלי session גרפי
-  אינטראקטיבי.
-- קובץ docker-compose.yml עדיין לא נכתב - ממתין לחסימה הזו כדי לא לסמן משימה
-  "גמורה" בלי אימות אמיתי.
-- Learning for next cycle: לפני שמנסים שוב את US-001, לבקש מהמשתמש להריץ את
-  Docker Desktop ידנית (מהמסך שלו) ולוודא עם `docker ps` שהוא רץ, ורק אז להמשיך.
-
-## Resolution — US-001 הוחלף ב-Atlas (2026-08-26)
-- המשתמש ביקש להתחבר ל-MongoDB Atlas דרך Google במקום Docker מקומי. יש כבר פרויקט
-  Atlas קיים בשם BOTWA עם קלאסטר פעיל (Cluster0, e6zhbxe.mongodb.net).
-- נוצר משתמש DB ייעודי לאפליקציה הזו: `equipment_lending_app`, role
-  readWriteAnyDatabase — במכוון לא נעשה שימוש חוזר במשתמש `botwa` הקיים (Atlas
-  admin), כדי לא לתת לאפליקציה הרשאות רחבות מדי ולא לחשוף/לגעת בסיסמה של משתמש
-  משותף אחר.
-- IP Access List כבר כולל 0.0.0.0/0 (פתוח), אז לא נדרש שינוי שם.
-- MONGODB_URI נכתב ל-`.env` המקומי (לא ל-git): כולל את שם המשתמש/סיסמה החדשים +
-  שם מסד הנתונים `equipment-lending` בנתיב ה-URI (חשוב - בלי זה Mongo יתחבר ל-DB
-  ברירת מחדל ("test") ולא לזה שבו כל הקוד מצפה לעבוד).
-- Learning: כדי לקבל סיסמה בפועל דרך ה-UI של Atlas צריך ליצור משתמש חדש (Atlas לא
-  חושף סיסמאות קיימות בחזרה) - כפתור "Autogenerate Secure Password" + "SHOW" חושף
-  אותה כטקסט גלוי במסך, שם אפשר לקרוא אותה מ-screenshot.
-
-## Iteration 2 — US-002 (מודול חיבור Mongo)
-- מה נעשה: `npm install mongodb`; נוצר `server/db.ts` עם `getDb()` (חיבור יחיד,
-  cached, זורק שגיאה ברורה אם MONGODB_URI חסר - אותה תבנית כמו JWT_SECRET ב-
-  server/auth.ts); `server/index.ts` עודכן כך ש-`app.listen` וה-reminder sweep
-  רצים רק אחרי ש-getDb() מצליח, עם process.exit(1) והודעה ברורה אם החיבור נכשל.
-- Validation: `npm run lint` (tsc --noEmit) - עובר נקי עבור הקבצים שנגעתי בהם.
-  יש 2 שגיאות קיימות-מראש ב-InventoryView.tsx (קומפוננטת legacy מתה, מיועדת
-  להסרה ב-US-012) - לא קשורות לשינוי הזה, לא חסמו את ה-commit.
-- Files: server/db.ts (חדש), server/index.ts, package.json/package-lock.json
-  (תלות mongodb), .env.example (MONGODB_URI מתועד), .env (המחרוזת האמיתית -
-  לא ב-git).
-- Learning for next cycle (US-003, users store): server/store.ts הנוכחי הוא
-  סינכרוני לגמרי (readUsers/writeUsers/findUserByUsername). כל הקוראים שלו
-  (server/index.ts login/me, server/seed-users.ts, server/setupRoutes.ts) קוראים
-  לו בלי await - כשהופכים אותו ל-async צריך לעדכן את כל שלושת הקבצים האלה
-  באותו מחזור, אחרת typecheck ייפול על "Promise is not assignable".
-
-## Iteration 3 — US-003 (מיגרציית users ל-Mongo)
-- מה נעשה: server/store.ts עודכן לגמרי ל-async מול collection 'users' (unique
-  index case-insensitive על username, collation strength 2). כל שלושת הקוראים
-  עודכנו: server/index.ts (login/me + toPublicUser עם Awaited<ReturnType<...>>
-  כי הטיפוס הפך ל-Promise), server/seed-users.ts (import 'dotenv/config' נוסף כי
-  הסקריפט רץ standalone עם tsx, לא דרך index.ts; process.exit() בסוף כי
-  MongoClient משאיר event loop פתוח), server/setupRoutes.ts (readUsers().length
-  במקום fs.existsSync).
-- Validation מלאה (לא רק typecheck): הרצתי בפועל `npm run seed:users` מול
-  Atlas האמיתי - נוצרו 5 חשבונות; הרצה שנייה סירבה כמצופה (idempotent); הרצתי
-  `npm run dev:server`, ראיתי "Connected to MongoDB" בלוג, ובדקתי עם curl:
-  login עם admin/ChangeMe!Admin1 מצליח ומחזיר JWT תקין; login עם ADMIN (אותיות
-  גדולות) גם מצליח (מוודא שה-collation case-insensitive עובד); login עם סיסמה
-  שגויה נדחה כראוי (401).
-- Learning for next cycle (US-004, orders store): צריך גם process cleanup דומה
-  אם כותבים סקריפטים standalone נוספים - MongoClient לא סוגר את עצמו לבד.
-  גם לזכור: תמיד להריץ dev:server (לא רק typecheck) ולבדוק עם curl בפועל לפני
-  שמסמנים story שנוגע ב-DB כ-"עובד" - typecheck פסי לא אומר שה-collation/
-  ה-connection string נכונים בפועל.
-
-## Iteration 4 — US-004 (מיגרציית orders ל-Mongo)
-- מה נעשה: server/ordersStore.ts נכתב מחדש לגמרי מול collection 'orders' -
-  unique index על id, seed חד-פעמי מ-INITIAL_ORDERS אם ריק. שיפור מעבר לדרישה
-  המקורית: createOrder/updateOrder עברו מ-read-all-then-write-all (כמו הקובץ
-  הישן) ל-insertOne/findOneAndUpdate אטומיים - זה סוגר את הפער של "אין locking
-  בין קריאה-לכתיבה" שצוין ב-PRD §6 לגבי כל שכבת ה-JSON-store הישנה, לפחות
-  עבור orders. readOrders ממוין לפי createdAt desc כדי לשמר את סמנטיקת
-  "החדש ביותר קודם" שהיתה קיימת דרך prepend בקובץ הישן.
-  עודכנו server/ordersRoutes.ts (כל handler הפך async) ו-server/reminders.ts
-  (await על readOrders/updateOrder).
-- Validation מלאה: הרצתי dev:server, התחברתי, GET /orders החזיר את 3 ההזמנות
-  הזרועות; POST /orders יצר הזמנת בדיקה בהצלחה; POST חוזר עם אותו id נדחה עם
-  409 (מוודא שה-unique index+טיפול בשגיאת קוד 11000 עובדים); PATCH עדכן סטטוס
-  בהצלחה. ניקיתי את רשומת הבדיקה מה-DB דרך סקריפט tsx חד-פעמי (_tmp_cleanup.ts,
-  נמחק אחרי הריצה - לא הושאר בפרויקט).
-- Learning: node -e / קבצים זמניים תחת /tmp לא עובדים טוב עם tsx על Windows
-  (בעיית resolution בין נתיבי bash-mounted ל-node_modules של הפרויקט) - אם
-  צריך סקריפט חד-פעמי לבדיקה/ניקוי, לכתוב אותו כקובץ .ts בתוך שורש הפרויקט
-  עצמו (עם Write), להריץ עם npx tsx, ואז למחוק אותו - לא תחת /tmp.
-- Learning for next cycle (US-005, generic catalog store): warehousesStore.find
-  ב-ordersRoutes.ts (resolveOrgId) עדיין סינכרוני בכוונה - הוא ישודרג רק
-  ב-US-005 ביחד עם שאר ה-genericStore. כשמשדרגים אותו, לזכור לעדכן גם את
-  resolveOrgId/canAccessOrder ב-ordersRoutes.ts ל-async (זה קובץ שכבר נגעתי
-  בו במחזור הזה, קל לפספס שהוא צריך עוד עדכון במחזור הבא).
-
-## גילוי אבטחה — .vscode/sftp.json (2026-08-26)
-- בזמן העברת התיקייה ל-Desktop התגלה קובץ `.vscode/sftp.json` עם סיסמת SFTP
-  בטקסט גלוי לשרת פרודקשן (103.95.119.21, rental.message.co.il). נוסף מיידית
-  ל-.gitignore לפני ה-commit/push הראשון כדי שלא יעלה לגיטהאב הציבורי
-  (mesergo/equipment-lending2). המשתמש עדיין לא החליף את הסיסמה הזו - שווה
-  להזכיר לו שוב בהזדמנות, היא עדיין יושבת בטקסט גלוי מקומית.
-
-## Iteration 5 — US-005 (מיגרציית generic catalog store ל-Mongo)
-- מה נעשה: server/genericStore.ts נכתב מחדש - createMongoStore<T> במקום
-  createJsonStore<T>, אותה חתימה (readAll/find/create/update/remove; writeAll
-  הוסר כי לא נצרך חיצונית - אותו שיקול כמו ordersStore). server/catalogRoutes.ts
-  עודכן במלואו ל-await (5 GET ציבוריים + customers המוגן + customers/lookup +
-  makeCrud הגנרי לכל 6 הישויות). server/ordersRoutes.ts עודכן גם: resolveOrgId
-  ו-canAccessOrder הפכו async כי הם קוראים ל-warehousesStore.find שכבר לא
-  סינכרוני; ה-route GET /orders עודכן להריץ resolveOrgId על כל ההזמנות במקביל
-  עם Promise.all לפני הסינון (Array.filter לא יכול להיות async ישירות).
-- מכשול טכני משמעותי: TypeScript לא הצליח לפתור את הטיפוסים הגנריים של
-  MongoDB driver (OptionalUnlessRequiredId<T>, WithId<T>) מול `T extends {id:
-  string}` גנרי משלנו - שגיאות "Type 'T' is not assignable to
-  OptionalUnlessRequiredId<T>" בכל מתודה. פתרון: לוותר על `Collection<T>`
-  הטיפוסי ולהשתמש ב-`Collection<Document>` לא-טיפוסי, עם cast מפורש ל-T
-  בגבולות הפונקציות (insertOne/insertMany מקבלים `as Document`, תוצאות
-  find/findOneAndUpdate מקבלות `as unknown as T`). זו תבנית לגיטימית ל-wrapper
-  גנרי כזה - לא "עוקפים" בעיה אמיתית, רק את מגבלת ה-type inference של הדרייבר.
-- Validation מלאה מול Atlas: הרצתי dev:server; GET לכל 5 סוגי הרשימות
-  (products=12, equipment=12, warehouses=10, וכו') החזיר את הזרעים; מחזור CRUD
-  מלא (POST→PATCH→DELETE→GET לוודא היעלמות) נבדק על branches ועל equipment;
-  customers/lookup (ציבורי) ו-GET /customers (מוגן, מסונן לפי ארגון) גם נבדקו.
-  כל רשומות הבדיקה נוקו מה-DB בסוף.
-- Learning: פלט עברית ב-PowerShell מוצג לפעמים כ-"???" בקונסולה (בעיית code
-  page, לא בעיית נתונים אמיתית) - `chcp 65001` + `[Console]::OutputEncoding =
-  [System.Text.Encoding]::UTF8` בתחילת סקריפט PowerShell עוזר, אבל גם בלעדיו
-  אפשר לסמוך על round-trip תקין (delete+verify מוכיח שהנתון עצמו לא התקלקל,
-  רק התצוגה בטרמינל).
-- Learning for next cycle (US-006, ניקוי JSON): לוודא עם grep שאין יותר אף
-  `fs.readFileSync`/`writeFileSync` שמצביע ל-server/data מחוץ להיסטוריית git
-  (server/whatsapp.ts כן ממשיך להשתמש ב-fs לכתיבת whatsapp-log.jsonl - זה
-  בכוונה, לא חלק מהמיגרציה, לא לגעת בו).
+- 2026-08-26: הפרויקט נבנה מחדש לגמרי לפי הנחיית המשתמש — נמחק כל הקוד הישן
+  (src/, server/, assets/, dist/, scripts/, README.md, index.html, metadata.json,
+  bun.lock). הבנייה מחדש מבוססת *רק* על סריקת המערכת החיה
+  https://ptdev1.message.co.il/admin (lendingCRM) — ראו PRD.md §2 למודל הנתונים
+  המלא. ההיסטוריה של הבנייה הקודמת (מיגרציית JSON→Mongo של הקוד הישן) עדיין
+  קיימת ב-git log (commits 2169c47..2e369e0) לצורך עיון בלבד — לא מקור אמת
+  יותר, הטיפוסים/מודל הנתונים שם שונים לגמרי מהמודל החדש.
+- MongoDB Atlas עדיין מחובר ותקין (BOTWA/Cluster0, משתמש ייעודי
+  equipment_lending_app) — MONGODB_URI ב-.env נשאר תקף, לא צריך להגדיר מחדש.
+  אבל: כל ה-collections הישנות (users, orders, products, models, branches,
+  warehouses, equipment, customers) עדיין קיימות ב-Atlas עם דאטה מהמודל הישן -
+  לא נמחקו אוטומטית. כשבונים מחדש את server/store.ts וכו' עם collection names
+  חדשים (או אותם שמות אבל סכימה שונה) - לשים לב אם יש קונפליקט. המלצה: להשתמש
+  בשמות collection חדשים לגמרי (למשל 'loans' במקום 'orders', 'products' יתנגש
+  עם השם הישן אז לשקול 'catalog_products' או למחוק/לזרוע-מחדש את הישן).
+- package.json עודכן: הוסרו @google/genai, canvas-confetti (תלויות של פיצ'רים
+  מהקוד הישן שנמחקו - AI search, קונפטי). נשארו: react, express, mongodb,
+  bcryptjs, jsonwebtoken, cors, tailwind, lucide-react. name שונה מ-
+  "react-example" ל-"equipment-lending". npm install רץ בהצלחה אחרי השינוי.
+- vite.config.ts, tsconfig.json, tsconfig.server.json, .gitignore, .env,
+  .env.example נשארו כמו שהיו - תשתית גנרית לא תלוית-דומיין, לא נגעתי בהם.
+- .vscode/sftp.json (סיסמת SFTP לפרודקשן) עדיין קיים ומחוץ ל-git (gitignored)
+  - עדיין לא הוחלף ע"י המשתמש, שווה תזכורת עתידית.
