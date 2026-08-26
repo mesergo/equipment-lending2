@@ -205,3 +205,22 @@
   /api/users, מוגבל ל-super_admin ליצירת super_admin/לניהול חוצה-ארגונים,
   ו-org_manager יכול ליצור רק coordinator/org_manager בארגון שלו) לפני
   שבונים את המסך - זה לא רק frontend, יש עוד עבודת backend נסתרת כאן.
+
+## Iteration 7 (בנייה מחדש) — US-111b (פער: מסכי Payments + ActionLog)
+- שמתי לב שה-PRD המקורי (US-111) כיסה רק 7 ישויות קטלוג, אבל שכח לגמרי
+  מסכי frontend ל-Payments (US-108) ו-ActionLog (US-109) - למרות שה-backend
+  שלהם קיים ועובד, וה-sidebar כבר מציג "תשלומים"/"לוגי פעולות" מ-US-110.
+  זה פער בתכנון ה-PRD עצמו, לא רק ביצוע - תיעדתי כ-US-111b כדי שהמסלול
+  נשאר שקוף (לא "שכחתי בשקט", אלא זיהיתי ותיקנתי).
+- הרחבתי את EntityTable.tsx עם FieldType חדש: 'boolean' (renderField מציג
+  select עם כן/לא, buildBody ממיר ל-boolean אמיתי לא string, תצוגת טבלה
+  מציגה כן/לא). זה הפעם הראשונה שהיה צריך שדה boolean בקונפיג - Payment.
+  wasCharged הוא ה-use case היחיד כרגע.
+- Validation בדפדפן: מסך תשלומים מציג נכון את התשלום מ-US-108 (סכום=150,
+  סטטוס=חויב, wasCharged=כן - כל 3 השדות תואמים למה שנשמר ב-PATCH הקודם).
+  מסך לוגי פעולות מציג את כל 3 הרשומות מ-US-107/US-112, ממוינות נכון.
+  0 שגיאות קונסולה.
+- Learning: כדאי לעשות "audit" מהיר של ה-sidebar מול ה-PRD בכל פעם שמוסיפים
+  entity חדש ל-nav - קל לפספס שנוסף route בלי story תואם. שווה לחזור על
+  זה שוב לפני שסוגרים את הבנייה מחדש, לוודא שכל item ב-NAV_ITEMS מקבל
+  קומפוננטה אמיתית ולא ComingSoon.

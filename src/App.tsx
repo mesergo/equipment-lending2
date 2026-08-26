@@ -11,8 +11,10 @@ import {
   ModelsScreen,
   ProductsScreen,
   CustomersScreen,
+  PaymentsScreen,
 } from './components/CatalogScreens';
 import LoansScreen from './components/LoansScreen';
+import ActionLogsScreen from './components/ActionLogsScreen';
 
 function useHashRoute(): string {
   const [hash, setHash] = useState(() => window.location.hash.slice(1) || 'dashboard');
@@ -75,9 +77,9 @@ function RouteContent({ route }: { route: string }) {
     case 'loans':
       return <LoansScreen />;
     case 'payments':
-      return <ComingSoon label="תשלומים" />;
+      return <PaymentsScreen />;
     case 'action-logs':
-      return <ComingSoon label="לוגי פעולות" />;
+      return <ActionLogsScreen />;
     case 'users':
       return <ComingSoon label="משתמשים" />;
     default:

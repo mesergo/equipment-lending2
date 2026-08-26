@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import EntityTable from './EntityTable';
 import { useAuthedFetch } from '../context/AuthContext';
-import type { Organization, Branch, Warehouse, Category, Model, Product, Customer } from '../types';
+import type { Organization, Branch, Warehouse, Category, Model, Product, Customer, Payment } from '../types';
 
 // Fetches a list once and turns it into <select> options — used by entities whose fields
 // reference another entity (Model→Category, Product→Model/Warehouse).
@@ -131,6 +131,33 @@ export function CustomersScreen() {
         { key: 'city', label: 'עיר' },
         { key: 'street', label: 'רחוב' },
         { key: 'buildingNumber', label: 'מספר בנין' },
+      ]}
+    />
+  );
+}
+
+export function PaymentsScreen() {
+  const customerOptions = useOptions('/api/customers', 'firstName');
+  return (
+    <EntityTable<Payment>
+      title="תשלומים"
+      apiPath="/api/payments"
+      fields={[
+        { key: 'customerId', label: 'לקוח', type: 'select', options: customerOptions, required: true },
+        { key: 'chargeAmount', label: 'סכום החיוב', type: 'number' },
+        { key: 'chargeReason', label: 'סיבת החיוב' },
+        {
+          key: 'status',
+          label: 'סטטוס',
+          type: 'select',
+          options: [
+            { value: 'waiting', label: 'ממתין' },
+            { value: 'charged', label: 'חויב' },
+            { value: 'failed', label: 'נכשל' },
+          ],
+        },
+        { key: 'wasCharged', label: 'האם חויב?', type: 'boolean' },
+        { key: 'lastCardDigits', label: 'ספרות אחרונות' },
       ]}
     />
   );

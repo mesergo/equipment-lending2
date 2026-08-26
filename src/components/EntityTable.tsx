@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuthedFetch } from '../context/AuthContext';
 
-export type FieldType = 'text' | 'number' | 'select';
+export type FieldType = 'text' | 'number' | 'select' | 'boolean';
 
 export interface FieldConfig<T> {
   key: keyof T & string;
@@ -70,7 +70,7 @@ export default function EntityTable<T extends { id: string }>({ title, apiPath, 
     for (const f of fields) {
       const raw = formValues[f.key] ?? '';
       if (raw === '') continue;
-      body[f.key] = f.type === 'number' ? Number(raw) : raw;
+      body[f.key] = f.type === 'number' ? Number(raw) : f.type === 'boolean' ? raw === 'true' : raw;
     }
     return body;
   }
@@ -107,7 +107,8 @@ export default function EntityTable<T extends { id: string }>({ title, apiPath, 
   }
 
   function renderField(f: FieldConfig<T>) {
-    if (f.type === 'select') {
+    if (f.type === 'select' || f.type === 'boolean') {
+      const options = f.type === 'boolean' ? [{ value: 'true', label: 'כן' }, { value: 'false', label: 'לא' }] : f.options;
       return (
         <select
           className="border rounded px-2 py-1 text-sm"
@@ -115,7 +116,7 @@ export default function EntityTable<T extends { id: string }>({ title, apiPath, 
           onChange={(e) => setFormValues({ ...formValues, [f.key]: e.target.value })}
         >
           <option value="">— בחר —</option>
-          {f.options?.map((o) => (
+          {options?.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>
@@ -194,7 +195,11 @@ export default function EntityTable<T extends { id: string }>({ title, apiPath, 
                     <td key={f.key} className="px-3 py-2">
                       {f.type === 'select'
                         ? f.options?.find((o) => o.value === item[f.key])?.label ?? String(item[f.key] ?? '')
-                        : String(item[f.key] ?? '')}
+                        : f.type === 'boolean'
+                          ? item[f.key]
+                            ? 'כן'
+                            : 'לא'
+                          : String(item[f.key] ?? '')}
                     </td>
                   ))}
                   <td className="px-3 py-2 text-left whitespace-nowrap">

@@ -259,6 +259,21 @@ Organization (ארגון)
       אחרי restart של Vite) — נפתר ע"י פתיחת טאב חדש; לא באג באפליקציה עצמה,
       תועד ב-progress.txt
 
+#### US-111b: מסכי Payments + ActionLog (פער שהתגלה, לא היה ב-PRD המקורי)
+**Description:** US-111 כיסה 7 ישויות אבל לא Payments/ActionLog, למרות
+שה-backend שלהם (US-108/109) כבר קיים והם מופיעים ב-sidebar. נוסף כתיקון
+פער, לא תוכנן מראש.
+
+**Acceptance Criteria:**
+- [x] מסך תשלומים (EntityTable גנרי, כולל שדה `boolean` חדש ל-wasCharged —
+      הרחבת FieldType ב-EntityTable מ-`'text'|'number'|'select'` ל-גם
+      `'boolean'`) — 2026-08-26
+- [x] מסך לוגי פעולות (read-only — אין create/edit/delete, כי ActionLog
+      נכתב רק פנימית) — 2026-08-26
+- [x] Typecheck passes; Verify changes work in browser — 2026-08-26, שני
+      המסכים נבדקו בפועל עם נתונים אמיתיים מ-US-107/108 (תשלום עם
+      wasCharged=כן מוצג נכון; 3 רשומות ActionLog מוצגות ממוינות)
+
 #### US-113: מסך משתמשים (Users) + ניהול הרשאות
 **Acceptance Criteria:**
 - [ ] רשימת משתמשים + יצירה/עריכה, כולל בחירת תפקיד מבין 3
