@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Edit3, Package, Building2, Boxes, Tag, Trash2, Image as ImageIcon } from 'lucide-react';
-import { EquipmentCategory, EquipmentItem, Warehouse, Organization } from '../types';
+import { X, Save, Edit3, Trash2 } from 'lucide-react';
+import { EquipmentItem, Warehouse, Organization, Product, Model } from '../types';
 
 interface EditEquipmentModalProps {
   isOpen: boolean;
@@ -9,6 +9,8 @@ interface EditEquipmentModalProps {
   hospitals?: Warehouse[];
   warehouses?: Warehouse[];
   organizations?: Organization[];
+  products?: Product[];
+  models?: Model[];
   onSave: (updatedItem: EquipmentItem) => void;
   onDelete?: (itemId: string) => void;
 }
@@ -20,13 +22,15 @@ export const EditEquipmentModal: React.FC<EditEquipmentModalProps> = ({
   hospitals,
   warehouses,
   organizations = [],
+  products = [],
+  models = [],
   onSave,
   onDelete,
 }) => {
   const allWarehouses = warehouses || hospitals || [];
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
-  const [category, setCategory] = useState<EquipmentCategory>('mobility');
+  const [modelId, setModelId] = useState('');
   const [selectedOrgId, setSelectedOrgId] = useState<string>('org-hesed');
   const [warehouseId, setWarehouseId] = useState('main');
   const [depotLocation, setDepotLocation] = useState('');
@@ -34,19 +38,14 @@ export const EditEquipmentModal: React.FC<EditEquipmentModalProps> = ({
   const [specsText, setSpecsText] = useState('');
   const [stockTotal, setStockTotal] = useState<number>(0);
   const [stockAvailable, setStockAvailable] = useState<number>(0);
-  const [depositAmount, setDepositAmount] = useState<number>(0);
-  const [maxLoanDays, setMaxLoanDays] = useState<number>(14);
   const [condition, setCondition] = useState<'new' | 'excellent' | 'good' | 'needs_inspection'>('excellent');
   const [status, setStatus] = useState<EquipmentItem['status']>('available');
-  const [photoUrl, setPhotoUrl] = useState('');
-  const [isUrgentSabbath, setIsUrgentSabbath] = useState(false);
-  const [featured, setFeatured] = useState(false);
 
   useEffect(() => {
     if (item) {
       setName(item.name);
       setSku(item.sku);
-      setCategory(item.category);
+      setModelId(item.modelId || '');
       setSelectedOrgId(item.organizationId || allWarehouses.find(w => w.id === (item.warehouseId || item.hospitalId))?.organizationId || 'org-hesed');
       setWarehouseId(item.warehouseId || item.hospitalId || allWarehouses[0]?.id || 'main');
       setDepotLocation(item.depotLocation);
@@ -54,24 +53,25 @@ export const EditEquipmentModal: React.FC<EditEquipmentModalProps> = ({
       setSpecsText(item.fullSpecs ? item.fullSpecs.join(', ') : '');
       setStockTotal(item.stockTotal);
       setStockAvailable(item.stockAvailable);
-      setDepositAmount(item.depositAmount);
-      setMaxLoanDays(item.maxLoanDays);
       setCondition(item.condition);
       setStatus(item.status);
-      setPhotoUrl(item.photoUrl || '');
-      setIsUrgentSabbath(!!item.isUrgentSabbath);
-      setFeatured(!!item.featured);
     }
-  }, [item, allWarehouses]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item]);
 
   if (!isOpen || !item) return null;
 
-  const filteredWarehouses = selectedOrgId === 'all' 
-    ? allWarehouses 
+  const filteredWarehouses = selectedOrgId === 'all'
+    ? allWarehouses
     : allWarehouses.filter(w => !w.organizationId || w.organizationId === selectedOrgId);
 
   const selectedWarehouse = allWarehouses.find(w => w.id === warehouseId) || allWarehouses[0];
   const selectedOrg = organizations.find(o => o.id === (selectedOrgId || selectedWarehouse?.organizationId));
+
+  // Models available for whichever org is selected, grouped by their Product ("מוצר").
+  const orgModels = models.filter((m) => !selectedOrgId || selectedOrgId === 'all' || m.organizationId === selectedOrgId);
+  const orgProducts = products.filter((p) => orgModels.some((m) => m.productId === p.id));
+  const selectedModel = models.find((m) => m.id === modelId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,7 +85,7 @@ export const EditEquipmentModal: React.FC<EditEquipmentModalProps> = ({
       ...item,
       name,
       sku,
-      category,
+      modelId: modelId || undefined,
       organizationId: selectedOrg?.id || selectedWarehouse?.organizationId || 'org-hesed',
       organizationName: selectedOrg?.name || selectedWarehouse?.organizationName || 'עמותת חסד ומרפא',
       warehouseId,
@@ -96,13 +96,16 @@ export const EditEquipmentModal: React.FC<EditEquipmentModalProps> = ({
       fullSpecs: fullSpecs.length > 0 ? fullSpecs : item.fullSpecs,
       stockTotal: Number(stockTotal),
       stockAvailable: Number(stockAvailable),
-      depositAmount: Number(depositAmount),
-      maxLoanDays: Number(maxLoanDays),
+      // Deposit / max loan days / photo are Model-level attributes now — never typed in per-SKU.
+      // Fall back to whatever the item already had if no model is linked yet.
+      depositAmount: selectedModel?.depositAmount ?? item.depositAmount,
+      maxLoanDays: selectedModel?.maxLoanDays ?? item.maxLoanDays,
+      photoUrl: selectedModel?.imageUrl || item.photoUrl,
+      isUrgentSabbath: selectedModel?.isUrgentSabbath ?? item.isUrgentSabbath,
+      featured: selectedModel?.featured ?? item.featured,
+      weightCapacityKg: selectedModel?.weightCapacityKg ?? item.weightCapacityKg,
       condition,
       status,
-      photoUrl: photoUrl || undefined,
-      isUrgentSabbath,
-      featured,
     };
 
     onSave(updated);
@@ -112,7 +115,7 @@ export const EditEquipmentModal: React.FC<EditEquipmentModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        
+
         {/* Header */}
         <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -120,8 +123,8 @@ export const EditEquipmentModal: React.FC<EditEquipmentModalProps> = ({
               <Edit3 className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-black text-slate-900">עריכת פריט ציוד #{item.sku}</h2>
-              <p className="text-xs text-slate-500">עדכון פרטים, שיוך לארגון ולמחסן, מלאי וסטטוס זמינות</p>
+              <h2 className="text-base font-black text-slate-900">עריכת פריט (מק"ט) #{item.sku}</h2>
+              <p className="text-xs text-slate-500">עדכון פרטים, שיוך לארגון, מחסן, דגם, מלאי וסטטוס זמינות</p>
             </div>
           </div>
 
@@ -135,7 +138,7 @@ export const EditEquipmentModal: React.FC<EditEquipmentModalProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 text-xs text-right">
-          
+
           {/* Organization & Warehouse Selection */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 bg-teal-50/50 border border-teal-100 rounded-2xl">
             <div>
@@ -181,6 +184,38 @@ export const EditEquipmentModal: React.FC<EditEquipmentModalProps> = ({
             </div>
           </div>
 
+          <div>
+            <label className="block text-slate-700 font-bold mb-1">דגם ("מוצר" &gt; "דגם") *</label>
+            <select
+              required
+              value={modelId}
+              onChange={(e) => setModelId(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-teal-600"
+            >
+              <option value="">בחר דגם...</option>
+              {orgProducts.map((product) => (
+                <optgroup key={product.id} label={product.name}>
+                  {orgModels.filter((m) => m.productId === product.id).map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            {selectedModel && (
+              <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-3">
+                <div className="w-12 h-12 rounded-lg bg-white border border-slate-200 overflow-hidden shrink-0">
+                  {selectedModel.imageUrl && (
+                    <img src={selectedModel.imageUrl} alt={selectedModel.name} className="w-full h-full object-cover" />
+                  )}
+                </div>
+                <div className="text-[11px] text-slate-600 space-y-0.5">
+                  <div>פיקדון: <strong className="text-teal-700">₪{selectedModel.depositAmount}</strong> · עד {selectedModel.maxLoanDays} ימי השאלה</div>
+                  <div className="text-slate-400">התמונה, הפיקדון וימי ההשאלה נלקחים מהדגם — לעריכתם עברו ללשונית "מוצרים ודגמים".</div>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-slate-700 font-bold mb-1">שם הפריט</label>
@@ -205,53 +240,14 @@ export const EditEquipmentModal: React.FC<EditEquipmentModalProps> = ({
             </div>
           </div>
 
-          {/* Photo URL Input & Preview */}
-          <div className="space-y-2">
-            <label className="block text-slate-700 font-bold">כתובת תמונת מוצר (Image URL)</label>
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1">
-                <ImageIcon className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/photo-..."
-                  value={photoUrl}
-                  onChange={(e) => setPhotoUrl(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pr-10 pl-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600 font-mono"
-                />
-              </div>
-              {photoUrl && (
-                <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
-                  <img src={photoUrl} alt="Preview" className="w-full h-full object-cover" />
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-slate-700 font-bold mb-1">קטגוריה</label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as EquipmentCategory)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
-              >
-                <option value="mobility">ניידות וכיסאות גלגלים</option>
-                <option value="medical">מכשור נשימתי ורפואי</option>
-                <option value="comfort">שהייה ולינת מלווים</option>
-                <option value="sabbath">ערכות שבת ומועדים</option>
-                <option value="hygiene">רחצה, שיקום ויולדות</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-slate-700 font-bold mb-1">מיקום מדויק במוקד</label>
-              <input
-                type="text"
-                value={depotLocation}
-                onChange={(e) => setDepotLocation(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
-              />
-            </div>
+          <div>
+            <label className="block text-slate-700 font-bold mb-1">מיקום מדויק במוקד</label>
+            <input
+              type="text"
+              value={depotLocation}
+              onChange={(e) => setDepotLocation(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
+            />
           </div>
 
           <div>
@@ -274,7 +270,7 @@ export const EditEquipmentModal: React.FC<EditEquipmentModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+          <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
             <div>
               <label className="block text-slate-700 font-bold mb-1">מלאי כולל</label>
               <input
@@ -296,28 +292,6 @@ export const EditEquipmentModal: React.FC<EditEquipmentModalProps> = ({
                 className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:outline-none focus:border-teal-600"
               />
             </div>
-
-            <div>
-              <label className="block text-slate-700 font-bold mb-1">מסגרת ביטחון (₪)</label>
-              <input
-                type="number"
-                min={0}
-                value={depositAmount}
-                onChange={(e) => setDepositAmount(Number(e.target.value))}
-                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-teal-700 font-bold focus:outline-none focus:border-teal-600"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-700 font-bold mb-1">ימי השאלה</label>
-              <input
-                type="number"
-                min={1}
-                value={maxLoanDays}
-                onChange={(e) => setMaxLoanDays(Number(e.target.value))}
-                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:outline-none focus:border-teal-600"
-              />
-            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -336,41 +310,19 @@ export const EditEquipmentModal: React.FC<EditEquipmentModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-slate-700 font-bold mb-1">סטטוס פריט</label>
+              <label className="block text-slate-700 font-bold mb-1">סטטוס פריט (מוצר)</label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as any)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
               >
-                <option value="available">זמין להשאלה</option>
-                <option value="loaned">מושאל כעת</option>
+                <option value="available">זמין</option>
+                <option value="unavailable">לא זמין</option>
+                <option value="on_loan">בהשאלה</option>
+                <option value="faulty_pending_inspection">תקול וממתין לבדיקה</option>
                 <option value="sanitizing">בתהליך חיטוי ובדיקה</option>
-                <option value="maintenance">בתיקון / מעבדה</option>
-                <option value="reserved">שמור להעברה</option>
               </select>
             </div>
-          </div>
-
-          <div className="flex items-center gap-6 pt-2">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={isUrgentSabbath}
-                onChange={(e) => setIsUrgentSabbath(e.target.checked)}
-                className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300"
-              />
-              <span className="font-bold text-slate-800">מתאים לערכות שבת דחופות</span>
-            </label>
-
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={featured}
-                onChange={(e) => setFeatured(e.target.checked)}
-                className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300"
-              />
-              <span className="font-bold text-slate-800">הצג פריט מומלץ בעמוד הראשי</span>
-            </label>
           </div>
 
           {/* Footer Actions */}

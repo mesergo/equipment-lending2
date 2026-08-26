@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Search, 
   ShoppingCart, 
@@ -66,6 +66,65 @@ export const CatalogStoreView: React.FC<CatalogStoreViewProps> = ({
   const [onlyInStock, setOnlyInStock] = useState(false);
   const [sortBy, setSortBy] = useState<'popular' | 'name' | 'deposit_low' | 'stock'>('popular');
 
+  // AI natural-language search (server/aiSearchRoutes.ts): lets a customer describe a need
+  // ("משהו שעוזר לקום מהמיטה") instead of knowing the exact product name or category. This is
+  // purely additive to the existing plain-text search below - it only ever adds extra matched
+  // item ids on top, debounced so we don't call the API on every keystroke. If the server has no
+  // GEMINI_API_KEY configured yet, or the call fails for any reason, aiMatchedIds just stays empty
+  // and the plain-text search keeps working exactly as before.
+  const [aiMatchedIds, setAiMatchedIds] = useState<string[]>([]);
+  const [aiSearching, setAiSearching] = useState(false);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 3) {
+      setAiMatchedIds([]);
+      setAiSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setAiSearching(true);
+    const timer = setTimeout(() => {
+      const items = equipment.map((item) => ({
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        category: item.category,
+      }));
+      fetch('/api/catalog/ai-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q, items }),
+      })
+        .then((res) => (res.ok ? res.json() : { matchedIds: [] }))
+        .then((data) => {
+          if (!cancelled) setAiMatchedIds(Array.isArray(data.matchedIds) ? data.matchedIds : []);
+        })
+        .catch(() => {
+          if (!cancelled) setAiMatchedIds([]);
+        })
+        .finally(() => {
+          if (!cancelled) setAiSearching(false);
+        });
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately excludes `equipment`:
+    // it only changes on catalog refetch, not on typing, and including it would re-trigger the
+    // debounce on every catalog poll instead of just on query changes.
+  }, [searchQuery]);
+
+  const matchesPlainTextSearch = (item: EquipmentItem, q: string) =>
+    item.name.toLowerCase().includes(q) ||
+    item.sku.toLowerCase().includes(q) ||
+    item.description.toLowerCase().includes(q) ||
+    item.depotLocation.toLowerCase().includes(q) ||
+    (item.hospitalName || '').toLowerCase().includes(q);
+
   const categories: { id: EquipmentCategory | 'all'; label: string; icon: any }[] = [
     { id: 'all', label: 'כל הקטלוג והעזרים', icon: Layers },
     { id: 'mobility', label: 'ניידות וכיסאות גלגלים', icon: Activity },
@@ -74,6 +133,8 @@ export const CatalogStoreView: React.FC<CatalogStoreViewProps> = ({
     { id: 'sabbath', label: 'ערכות שבת ומועדים', icon: MoonStar },
     { id: 'hygiene', label: 'רחצה, שיקום ויולדות', icon: Bath },
   ];
+
+  const aiMatchedIdSet = new Set(aiMatchedIds);
 
   // Filter items by Warehouse, Category, Search, InStock
   const filteredEquipment = equipment.filter((item) => {
@@ -93,19 +154,22 @@ export const CatalogStoreView: React.FC<CatalogStoreViewProps> = ({
       return false;
     }
 
-    // Search query
+    // Search query - plain-text match OR an AI-matched id (see the useEffect above)
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchName = item.name.toLowerCase().includes(q);
-      const matchSku = item.sku.toLowerCase().includes(q);
-      const matchDesc = item.description.toLowerCase().includes(q);
-      const matchLocation = item.depotLocation.toLowerCase().includes(q);
-      const matchHosp = (item.hospitalName || '').toLowerCase().includes(q);
-      return matchName || matchSku || matchDesc || matchLocation || matchHosp;
+      const q = searchQuery.trim().toLowerCase();
+      return matchesPlainTextSearch(item, q) || aiMatchedIdSet.has(item.id);
     }
 
     return true;
   });
+
+  // How many results came ONLY from the AI's semantic match (not from the plain-text search) -
+  // used to show a small, honest "found N smart matches" note rather than pretending it's magic.
+  const aiOnlyMatchCount = (() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q || aiMatchedIds.length === 0) return 0;
+    return equipment.filter((item) => aiMatchedIdSet.has(item.id) && !matchesPlainTextSearch(item, q)).length;
+  })();
 
   // Sort items
   const sortedEquipment = [...filteredEquipment].sort((a, b) => {
@@ -292,7 +356,7 @@ export const CatalogStoreView: React.FC<CatalogStoreViewProps> = ({
           <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="חיפוש ציוד לפי שם, מק״ט, בית חולים, מחלקה או ייעוד..."
+            placeholder="חיפוש ציוד לפי שם, מק״ט, בית חולים, מחלקה או ייעוד... (אפשר גם לתאר צורך, למשל: משהו שעוזר לקום מהמיטה)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-slate-50 border border-slate-200 rounded-xl pr-10 pl-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-teal-600 focus:bg-white transition-all"
@@ -304,6 +368,20 @@ export const CatalogStoreView: React.FC<CatalogStoreViewProps> = ({
             >
               נקה
             </button>
+          )}
+
+          {/* AI natural-language search status - purely informational, never blocks the plain search */}
+          {aiSearching && (
+            <div className="mt-1.5 flex items-center gap-1 text-[11px] text-slate-400">
+              <Sparkles className="w-3 h-3 text-teal-500 animate-pulse" />
+              <span>מחפש גם התאמות חכמות לפי הצורך שתיארת...</span>
+            </div>
+          )}
+          {!aiSearching && aiOnlyMatchCount > 0 && (
+            <div className="mt-1.5 flex items-center gap-1 text-[11px] text-teal-700 font-bold">
+              <Sparkles className="w-3 h-3 text-teal-500" />
+              <span>נמצאו {aiOnlyMatchCount} התאמות חכמות נוספות לפי הצורך שתיארת</span>
+            </div>
           )}
         </div>
 

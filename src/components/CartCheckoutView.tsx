@@ -39,9 +39,21 @@ interface CartCheckoutViewProps {
   onUpdateQuantity: (equipmentId: string, delta: number) => void;
   onRemoveFromCart: (equipmentId: string) => void;
   onClearCart: () => void;
-  onOrderComplete: (order: OrderRecord) => void;
+  // Returns whether the order was actually saved (the server call can fail) — the checkout
+  // flow only advances to the confirmation screen once this resolves true.
+  onOrderComplete: (order: OrderRecord) => Promise<boolean>;
   onNavigateToCatalog: () => void;
   onNavigateToAdmin: () => void;
+}
+
+function toISODate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function formatHebrewDate(isoDate: string): string {
+  const d = new Date(isoDate + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return isoDate;
+  return d.toLocaleDateString('he-IL');
 }
 
 export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
@@ -74,6 +86,14 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
   const [bedNumber, setBedNumber] = useState('');
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>('bedside_volunteer');
   const [deliveryNotes, setDeliveryNotes] = useState('');
+
+  // Return date: the customer picks it (used to be silently fixed at "+14 days"). It also
+  // drives the WhatsApp reminder schedule server-side, so it has to be a real, storable date.
+  const minLoanDaysAcrossCart = cart.length > 0 ? Math.min(...cart.map((c) => c.equipment.maxLoanDays || 30)) : 30;
+  const minReturnDate = toISODate(new Date(Date.now() + 24 * 60 * 60 * 1000)); // tomorrow at the earliest
+  const maxReturnDate = toISODate(new Date(Date.now() + Math.max(1, minLoanDaysAcrossCart) * 24 * 60 * 60 * 1000));
+  const defaultReturnDate = toISODate(new Date(Date.now() + Math.min(14, Math.max(1, minLoanDaysAcrossCart)) * 24 * 60 * 60 * 1000));
+  const [expectedReturnDate, setExpectedReturnDate] = useState<string>(defaultReturnDate);
 
   // Step 3: Credit Card Frame Hold
   const [cardHolderName, setCardHolderName] = useState('');
@@ -109,6 +129,18 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
     }
     if (!roomNumber.trim()) {
       showToast('נא להזין מספר חדר במחלקה', undefined, 'error');
+      return false;
+    }
+    if (!expectedReturnDate) {
+      showToast('נא לבחור תאריך משוער להחזרת הציוד', undefined, 'error');
+      return false;
+    }
+    if (expectedReturnDate < minReturnDate || expectedReturnDate > maxReturnDate) {
+      showToast(
+        `תאריך ההחזרה חייב להיות בין ${formatHebrewDate(minReturnDate)} ל-${formatHebrewDate(maxReturnDate)}`,
+        undefined,
+        'error'
+      );
       return false;
     }
     return true;
@@ -153,9 +185,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
 
     setIsProcessingHold(true);
 
-    setTimeout(() => {
-      setIsProcessingHold(false);
-
+    setTimeout(async () => {
       const newOrderId = `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
       const holdAuthCode = `AUTH-HLD-${Math.floor(10000 + Math.random() * 90000)}`;
       const lockerCode = deliveryMethod === 'self_pickup_locker' ? `L-${Math.floor(1000 + Math.random() * 9000)}` : undefined;
@@ -163,8 +193,6 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
       const maskedCard = `****-****-****-${cardNumber.replace(/\D/g, '').slice(-4) || '7721'}`;
 
       const now = new Date();
-      const returnDate = new Date();
-      returnDate.setDate(now.getDate() + 14);
 
       const orderRecord: OrderRecord = {
         id: newOrderId,
@@ -174,6 +202,8 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
         caregiverName: caregiverName || patientName,
         caregiverPhone: caregiverPhone || patientPhone,
         caregiverRelation,
+        organizationId: selectedHospital.organizationId,
+        organizationName: selectedHospital.organizationName,
         warehouseId: hospitalId,
         warehouseName: selectedHospital.name,
         hospitalId,
@@ -204,12 +234,19 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
         digitalSignatureUrl: signature || undefined,
         orderStatus: 'pending_dispatch',
         createdAt: now.toLocaleDateString('he-IL') + ' ' + now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }),
-        expectedReturnDate: returnDate.toLocaleDateString('he-IL'),
+        expectedReturnDate,
         notes: deliveryNotes,
       };
 
+      const saved = await onOrderComplete(orderRecord);
+      setIsProcessingHold(false);
+
+      if (!saved) {
+        showToast('שמירת ההזמנה נכשלה. ודאו ששרת ה-API רץ ונסו שוב.', undefined, 'error');
+        return;
+      }
+
       setCompletedOrder(orderRecord);
-      onOrderComplete(orderRecord);
       onClearCart();
       setCurrentStep(5);
 
@@ -589,6 +626,23 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
             </div>
           </div>
 
+          {/* Expected Return Date — chosen by the customer, drives WhatsApp reminders */}
+          <div className="space-y-2 pt-2 border-t border-slate-100">
+            <label className="block text-xs font-black text-slate-900">תאריך משוער להחזרת הציוד *</label>
+            <input
+              type="date"
+              required
+              min={minReturnDate}
+              max={maxReturnDate}
+              value={expectedReturnDate}
+              onChange={(e) => setExpectedReturnDate(e.target.value)}
+              className="w-full sm:w-64 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
+            />
+            <p className="text-[11px] text-slate-500">
+              נשלח תזכורת בוואטסאפ יום לפני התאריך שתבחרו, ובכל יום נוסף עד שתדווחו שהחזרתם את הציוד.
+            </p>
+          </div>
+
           {/* Navigation Buttons */}
           <div className="flex items-center justify-between pt-4 border-t border-slate-100">
             <button
@@ -905,7 +959,7 @@ export const CartCheckoutView: React.FC<CartCheckoutViewProps> = ({
                 </div>
               )}
               <div>תאריך השאלה: <strong>{completedOrder.createdAt}</strong></div>
-              <div>יעד החזרה משוער: <strong>{completedOrder.expectedReturnDate}</strong></div>
+              <div>יעד החזרה משוער: <strong>{formatHebrewDate(completedOrder.expectedReturnDate)}</strong></div>
             </div>
 
           </div>

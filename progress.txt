@@ -1,0 +1,29 @@
+# Progress Log
+
+## Learnings
+(הערות שיצטברו במהלך העבודה — דפוסים, מכשולים, הקשר שימושי)
+
+- הקוד הקיים כבר בנוי בדפוס "JSON-file-now, MongoDB-later" מכוון: server/store.ts,
+  server/ordersStore.ts, server/genericStore.ts כולם עוטפים store פשוט עם
+  readAll/find/create/update/remove (או ואריאציה). המיגרציה אמורה לשמור על אותו
+  ממשק כלפי הקוראים (routes), רק להפוך אותו ל-async ולהחליף את המימוש הפנימי.
+- server/catalogRoutes.ts מייצא warehousesStore כדי ש-ordersRoutes.ts יוכל לבדוק
+  organizationId של מחסן - לשים לב לזה במיגרציה של genericStore, שלא "ייעלם" export.
+- README.md הנוכחי לא מעודכן: טוען שequipment/warehouses עדיין client-only, אבל
+  בפועל הם כבר persisted (JSON). לתקן כחלק מ-US-006, לא לסמוך עליו כמקור אמת.
+- docker Desktop לא היה רץ כברירת מחדל בסביבת הפיתוח הזו - נדרש להריץ אותו לפני
+  docker compose up.
+
+## Iteration 1 — US-001 (Docker Compose ל-MongoDB מקומי)
+- מה נעשה: ניסיון להריץ את Docker Desktop אוטומטית (Start-Process) לפני כתיבת
+  docker-compose.yml, כדי לוודא ש-US-001 אכן ניתן לאימות מקצה-לקצה.
+- כשל: Docker Desktop.exe מופעל (Start-Process מחזיר הצלחה) אבל לא נשאר רץ -
+  אחרי המתנה (~110 שניות) `docker ps` עדיין נכשל, ו-`Get-Process` לא מוצא שום
+  תהליך docker. WSL2 עצמו תקין (Ubuntu default, version 2), אז זה לא חסם WSL.
+  כנראה שהפעלת Docker Desktop דורשת אינטראקציה גרפית (מסך פתיחה/אישור
+  ראשוני/הרשאות) שלא ניתן לעקוף אוטומטית מתוך כלי אוטומציה בלי session גרפי
+  אינטראקטיבי.
+- קובץ docker-compose.yml עדיין לא נכתב - ממתין לחסימה הזו כדי לא לסמן משימה
+  "גמורה" בלי אימות אמיתי.
+- Learning for next cycle: לפני שמנסים שוב את US-001, לבקש מהמשתמש להריץ את
+  Docker Desktop ידנית (מהמסך שלו) ולוודא עם `docker ps` שהוא רץ, ורק אז להמשיך.

@@ -1,4 +1,4 @@
-import { EquipmentItem, Warehouse, Organization, OrderRecord, PatientRequest, SanitizationLog, Volunteer } from '../types';
+import { EquipmentItem, Warehouse, Organization, OrderRecord, PatientRequest, SanitizationLog, Volunteer, Product, Model, Branch, Customer } from '../types';
 
 export const ORGANIZATIONS: Organization[] = [
   {
@@ -59,6 +59,7 @@ export const WAREHOUSES: Warehouse[] = [
     name: 'מחסן ראשי וציוד שיקום - שיבא',
     organizationId: 'org-hesed',
     organizationName: 'עמותת חסד ומרפא',
+    branchId: 'branch-hesed-sheba',
     hospitalName: 'המרכז הרפואי שיבא תל השומר',
     city: 'רמת גן',
     location: 'בניין אשפוז מרכזי - קומה 0 (שער א׳)',
@@ -75,6 +76,7 @@ export const WAREHOUSES: Warehouse[] = [
     name: 'מחסן חירום ומכשור נשימתי - שיבא',
     organizationId: 'org-hesed',
     organizationName: 'עמותת חסד ומרפא',
+    branchId: 'branch-hesed-sheba',
     hospitalName: 'המרכז הרפואי שיבא תל השומר',
     city: 'רמת גן',
     location: 'סמוך למלר״ד ומיון - חדר חסד 104',
@@ -91,6 +93,7 @@ export const WAREHOUSES: Warehouse[] = [
     name: 'מחסן לוקרים חכם 24/7 - איכילוב',
     organizationId: 'org-hesed',
     organizationName: 'עמותת חסד ומרפא',
+    branchId: 'branch-hesed-ichilov',
     hospitalName: 'איכילוב - מרכז רפואי תל אביב',
     city: 'תל אביב',
     location: 'מגדל אריסון - לובי ראשי מול המודיעין',
@@ -107,6 +110,7 @@ export const WAREHOUSES: Warehouse[] = [
     name: 'מחסן ערכות שבת ושהייה - הדסה עין כרם',
     organizationId: 'org-hesed',
     organizationName: 'עמותת חסד ומרפא',
+    branchId: 'branch-hesed-hadassah',
     hospitalName: 'המרכז הרפואי הדסה עין כרם',
     city: 'ירושלים',
     location: 'בניין שרת קומה 2 - חדר שבת ומועדים',
@@ -125,6 +129,7 @@ export const WAREHOUSES: Warehouse[] = [
     name: 'מחסן מרכזי עזר מציון - בילינסון',
     organizationId: 'org-ezer',
     organizationName: 'עזר מציון',
+    branchId: 'branch-ezer-belinson',
     hospitalName: 'מרכז רפואי רבין - בילינסון',
     city: 'פתח תקווה',
     location: 'בניין מרכזי קומה 1 - חדר עזר מציון 112',
@@ -141,6 +146,7 @@ export const WAREHOUSES: Warehouse[] = [
     name: 'מחסן יולדות, רחצה וסטרילי - בילינסון',
     organizationId: 'org-ezer',
     organizationName: 'עזר מציון',
+    branchId: 'branch-ezer-belinson',
     hospitalName: 'מרכז רפואי רבין - בילינסון',
     city: 'פתח תקווה',
     location: 'בניין נשים ויולדות ע״ש הלן שניידר, קומה 2',
@@ -157,6 +163,7 @@ export const WAREHOUSES: Warehouse[] = [
     name: 'מוקד השאלה ושינוע מהיר - רמב״ם חיפה',
     organizationId: 'org-ezer',
     organizationName: 'עזר מציון',
+    branchId: 'branch-ezer-rambam',
     hospitalName: 'המרכז הרפואי רמב״ם חיפה',
     city: 'חיפה',
     location: 'בניין המאושפזים הראשי - קומת קרקע',
@@ -175,6 +182,7 @@ export const WAREHOUSES: Warehouse[] = [
     name: 'שלוחת יד שרה - הדסה עין כרם',
     organizationId: 'org-yad',
     organizationName: 'יד שרה',
+    branchId: 'branch-yad-hadassah',
     hospitalName: 'המרכז הרפואי הדסה עין כרם',
     city: 'ירושלים',
     location: 'קומת כניסה ראשית (סמוך לקניון הדסה)',
@@ -191,6 +199,7 @@ export const WAREHOUSES: Warehouse[] = [
     name: 'מוקד השאלה יד שרה - סורוקה באר שבע',
     organizationId: 'org-yad',
     organizationName: 'יד שרה',
+    branchId: 'branch-yad-soroka',
     hospitalName: 'המרכז הרפואי האוניברסיטאי סורוקה',
     city: 'באר שבע',
     location: 'בניין כירורגי קומה 1 - חדר 124',
@@ -209,6 +218,7 @@ export const WAREHOUSES: Warehouse[] = [
     name: 'מוקד עזרי ילדים ומלווים - שיבא ספרא',
     organizationId: 'org-lev',
     organizationName: 'רחשי לב',
+    branchId: 'branch-lev-sheba',
     hospitalName: 'המרכז הרפואי שיבא תל השומר',
     city: 'רמת גן',
     location: 'בית החולים לילדים ע״ש אדמונד ולילי ספרא - קומה 1',
@@ -224,9 +234,67 @@ export const WAREHOUSES: Warehouse[] = [
 // Alias for compatibility
 export const HOSPITALS = WAREHOUSES;
 
+// Branches ("סניפים") - the physical site/hospital a warehouse serves, as a managed entity
+// separate from the warehouse (storage location) itself. The same physical hospital can appear
+// once per organization, since each association manages its own branch list independently.
+export const BRANCHES: Branch[] = [
+  { id: 'branch-hesed-sheba', organizationId: 'org-hesed', organizationName: 'עמותת חסד ומרפא', name: 'המרכז הרפואי שיבא תל השומר', city: 'רמת גן', isDefault: true },
+  { id: 'branch-hesed-ichilov', organizationId: 'org-hesed', organizationName: 'עמותת חסד ומרפא', name: 'איכילוב - מרכז רפואי תל אביב', city: 'תל אביב' },
+  { id: 'branch-hesed-hadassah', organizationId: 'org-hesed', organizationName: 'עמותת חסד ומרפא', name: 'המרכז הרפואי הדסה עין כרם', city: 'ירושלים' },
+  { id: 'branch-ezer-belinson', organizationId: 'org-ezer', organizationName: 'עזר מציון', name: 'מרכז רפואי רבין - בילינסון', city: 'פתח תקווה', isDefault: true },
+  { id: 'branch-ezer-rambam', organizationId: 'org-ezer', organizationName: 'עזר מציון', name: 'המרכז הרפואי רמב״ם חיפה', city: 'חיפה' },
+  { id: 'branch-yad-hadassah', organizationId: 'org-yad', organizationName: 'יד שרה', name: 'המרכז הרפואי הדסה עין כרם', city: 'ירושלים', isDefault: true },
+  { id: 'branch-yad-soroka', organizationId: 'org-yad', organizationName: 'יד שרה', name: 'המרכז הרפואי האוניברסיטאי סורוקה', city: 'באר שבע' },
+  { id: 'branch-lev-sheba', organizationId: 'org-lev', organizationName: 'רחשי לב', name: 'המרכז הרפואי שיבא תל השומר', city: 'רמת גן', isDefault: true },
+];
+
+// Products ("מוצר") and Models ("דגם") - the new hierarchy replacing the flat EquipmentCategory
+// enum. Each existing equipment item below still gets its own Model (1:1 for now) so no existing
+// data is lost; new models can be added to an existing product from the admin "דגמים" screen.
+export const PRODUCTS: Product[] = [
+  { id: 'prod-hesed-wheelchairs', organizationId: 'org-hesed', name: 'כיסאות גלגלים' },
+  { id: 'prod-hesed-beds', organizationId: 'org-hesed', name: 'מיטות ומצעי מלווים' },
+  { id: 'prod-hesed-respiratory', organizationId: 'org-hesed', name: 'מכשור נשימתי' },
+  { id: 'prod-hesed-sabbath', organizationId: 'org-hesed', name: 'ערכות שבת ומועדים' },
+  { id: 'prod-hesed-accessories', organizationId: 'org-hesed', name: 'אביזרי נוחות' },
+  { id: 'prod-ezer-wheelchairs', organizationId: 'org-ezer', name: 'כיסאות גלגלים' },
+  { id: 'prod-ezer-pain', organizationId: 'org-ezer', name: 'מכשור לשיכוך כאבים' },
+  { id: 'prod-ezer-walkers', organizationId: 'org-ezer', name: 'הליכונים ועזרי ניידות' },
+  { id: 'prod-ezer-hygiene', organizationId: 'org-ezer', name: 'עזרי רחצה והיגיינה' },
+  { id: 'prod-ezer-maternity', organizationId: 'org-ezer', name: 'ציוד יולדות' },
+  { id: 'prod-yad-mattresses', organizationId: 'org-yad', name: 'מזרנים רפואיים' },
+  { id: 'prod-lev-kids', organizationId: 'org-lev', name: 'עזרי שהייה לילדים' },
+];
+
+export const MODELS: Model[] = [
+  { id: 'model-eq-101', productId: 'prod-hesed-wheelchairs', organizationId: 'org-hesed', name: 'כיסא גלגלים קל משקל מתקפל למעברים', description: 'כיסא גלגלים קומפקטי מאלומיניום תעופתי עם רגליות מתפרקות.', imageUrl: 'https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?w=700&auto=format&fit=crop&q=80', depositAmount: 100, maxLoanDays: 21, weightCapacityKg: 125, featured: true },
+  { id: 'model-eq-103', productId: 'prod-hesed-beds', organizationId: 'org-hesed', name: 'מיטת מלווה אורתופדית מתקפלת VIP + מזרן עבה', description: 'מיטה מתקפלת על גלגלים המאושרת ע"י הנהלת בתי החולים ללינת מלווים.', imageUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=700&auto=format&fit=crop&q=80', depositAmount: 80, maxLoanDays: 14, weightCapacityKg: 130, featured: true },
+  { id: 'model-eq-104', productId: 'prod-hesed-respiratory', organizationId: 'org-hesed', name: 'מחולל חמצן נייד ושקט 5 ליטר (דרגת בי״ח)', description: 'מחולל חמצן רפואי רציף שקט במיוחד, לחולים הזקוקים לתמיכה נשימתית מוגברת.', imageUrl: 'https://images.unsplash.com/photo-1583912267670-6575ad472688?w=700&auto=format&fit=crop&q=80', depositAmount: 300, maxLoanDays: 21, featured: true },
+  { id: 'model-eq-105', productId: 'prod-hesed-sabbath', organizationId: 'org-hesed', name: 'ערכת שבת ומועדים מושלמת למחלקה', description: 'ערכה ייעודית מאושרת: פלטת שבת, מיחם, נרות לד וערכת קידוש והבדלה.', imageUrl: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=700&auto=format&fit=crop&q=80', depositAmount: 50, maxLoanDays: 4, isUrgentSabbath: true, featured: true },
+  { id: 'model-eq-110', productId: 'prod-hesed-accessories', organizationId: 'org-hesed', name: 'עמדת טעינה מהירה ניידת (PowerBank 30,000mAh)', description: 'סוללת גיבוי עוצמתית לטעינת מכשירים לצד מיטת המאושפז.', imageUrl: 'https://images.unsplash.com/photo-1609592426815-a6a3b2b8004e?w=700&auto=format&fit=crop&q=80', depositAmount: 30, maxLoanDays: 7, featured: false },
+  { id: 'model-eq-102', productId: 'prod-ezer-wheelchairs', organizationId: 'org-ezer', name: 'כיסא גלגלים מרופד רחב עם תמיכת ראש ורגליים מתרוממות', description: 'כיסא גלגלים רחב ומרופד לחולים לאחר ניתוח אורתופדי או צורך בתמיכה מלאה.', imageUrl: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?w=700&auto=format&fit=crop&q=80', depositAmount: 150, maxLoanDays: 30, weightCapacityKg: 150, featured: true },
+  { id: 'model-eq-106', productId: 'prod-ezer-pain', organizationId: 'org-ezer', name: 'מכשיר טנס (TENS) דיגיטלי לשיכוך כאבים והקלה בלידה', description: 'מכשיר גירוי חשמלי עדין לשיכוך כאבי צירים, כאבי גב כרוניים ושיקום.', imageUrl: 'https://images.unsplash.com/photo-1559757175-5700dde675bc?w=700&auto=format&fit=crop&q=80', depositAmount: 60, maxLoanDays: 14, featured: false },
+  { id: 'model-eq-107', productId: 'prod-ezer-walkers', organizationId: 'org-ezer', name: 'הליכון אלומיניום מתקפל עם גלגלים ומעצורים', description: 'הליכון יציב במיוחד עם כפתור קיפול מהיר, לתרגול הליכה בשיקום.', imageUrl: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=700&auto=format&fit=crop&q=80', depositAmount: 40, maxLoanDays: 30, weightCapacityKg: 130, featured: false },
+  { id: 'model-eq-108', productId: 'prod-ezer-hygiene', organizationId: 'org-ezer', name: 'כיסא רחצה ומקלחת עם משענת וידיות אחיזה', description: 'כיסא אלומיניום עמיד במים המונע החלקה במקלחת המחלקה.', imageUrl: 'https://images.unsplash.com/photo-1584362917165-526a968579e8?w=700&auto=format&fit=crop&q=80', depositAmount: 50, maxLoanDays: 30, weightCapacityKg: 135, featured: false },
+  { id: 'model-eq-109', productId: 'prod-ezer-maternity', organizationId: 'org-ezer', name: 'משאבת חלב אם ברמה של בית חולים (Symphony)', description: 'משאבת הנקה מקצועית שקטה ויעילה ביותר, לאימהות לפגים ומאושפזות.', imageUrl: 'https://images.unsplash.com/photo-1555252333-9f8e92e65df9?w=700&auto=format&fit=crop&q=80', depositAmount: 120, maxLoanDays: 21, featured: true },
+  { id: 'model-eq-111', productId: 'prod-yad-mattresses', organizationId: 'org-yad', name: 'מזרן דינמי למניעת פצעי לחץ (מערכת אוויר מתחלפת)', description: 'מזרן רפואי עם משאבה שקטה המווסתת לחצים באופן אוטומטי.', imageUrl: 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?w=700&auto=format&fit=crop&q=80', depositAmount: 180, maxLoanDays: 30, featured: true },
+  { id: 'model-eq-112', productId: 'prod-lev-kids', organizationId: 'org-lev', name: 'כורסת מלווה מתקפלת לילדים + ערכת משחק וציור', description: 'כורסה מעוצבת צבעונית הנפתחת למיטת מלווה בחדר ילדים.', imageUrl: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=700&auto=format&fit=crop&q=80', depositAmount: 50, maxLoanDays: 14, featured: true },
+];
+
+// Customers ("לקוחות") - identified by mobile phone only (no ID number, no email, no full
+// address, per the client's request). Just a small illustrative seed.
+export const INITIAL_CUSTOMERS: Customer[] = [
+  { id: 'cust-1', organizationId: 'org-hesed', fullName: 'אורית כהן', mobilePhone: '0521112223', createdAt: '2026-07-01T09:00:00.000Z' },
+  { id: 'cust-2', organizationId: 'org-hesed', fullName: 'משה לוי', mobilePhone: '0543334445', createdAt: '2026-07-05T09:00:00.000Z' },
+  { id: 'cust-3', organizationId: 'org-ezer', fullName: 'רחל מזרחי', mobilePhone: '0505556667', createdAt: '2026-07-10T09:00:00.000Z' },
+  { id: 'cust-4', organizationId: 'org-yad', fullName: "יעקב אברמוביץ'", mobilePhone: '0537778889', createdAt: '2026-07-12T09:00:00.000Z' },
+  { id: 'cust-5', organizationId: 'org-lev', fullName: 'שרה גולן', mobilePhone: '0589990001', createdAt: '2026-07-15T09:00:00.000Z' },
+];
+
 export const INITIAL_EQUIPMENT: EquipmentItem[] = [
   {
     id: 'eq-101',
+    modelId: 'model-eq-101',
     sku: 'MED-WC-001',
     name: 'כיסא גלגלים קל משקל מתקפל למעברים',
     category: 'mobility',
@@ -251,6 +319,7 @@ export const INITIAL_EQUIPMENT: EquipmentItem[] = [
   },
   {
     id: 'eq-102',
+    modelId: 'model-eq-102',
     sku: 'MED-WC-002',
     name: 'כיסא גלגלים מרופד רחב עם תמיכת ראש ורגליים מתרוממות',
     category: 'mobility',
@@ -275,6 +344,7 @@ export const INITIAL_EQUIPMENT: EquipmentItem[] = [
   },
   {
     id: 'eq-103',
+    modelId: 'model-eq-103',
     sku: 'MED-BED-001',
     name: 'מיטת מלווה אורתופדית מתקפלת VIP + מזרן עבה',
     category: 'comfort',
@@ -299,6 +369,7 @@ export const INITIAL_EQUIPMENT: EquipmentItem[] = [
   },
   {
     id: 'eq-104',
+    modelId: 'model-eq-104',
     sku: 'MED-OXY-005',
     name: 'מחולל חמצן נייד ושקט 5 ליטר (דרגת בי״ח)',
     category: 'medical',
@@ -322,6 +393,7 @@ export const INITIAL_EQUIPMENT: EquipmentItem[] = [
   },
   {
     id: 'eq-105',
+    modelId: 'model-eq-105',
     sku: 'SAB-KIT-ULTRA',
     name: 'ערכת שבת ומועדים מושלמת למחלקה (פלטה + מיחם + נרות לד)',
     category: 'sabbath',
@@ -346,6 +418,7 @@ export const INITIAL_EQUIPMENT: EquipmentItem[] = [
   },
   {
     id: 'eq-106',
+    modelId: 'model-eq-106',
     sku: 'MED-TENS-01',
     name: 'מכשיר טנס (TENS) דיגיטלי לשיכוך כאבים והקלה בלידה',
     category: 'medical',
@@ -369,6 +442,7 @@ export const INITIAL_EQUIPMENT: EquipmentItem[] = [
   },
   {
     id: 'eq-107',
+    modelId: 'model-eq-107',
     sku: 'MED-WLK-001',
     name: 'הליכון אלומיניום מתקפל עם גלגלים ומעצורים',
     category: 'mobility',
@@ -393,6 +467,7 @@ export const INITIAL_EQUIPMENT: EquipmentItem[] = [
   },
   {
     id: 'eq-108',
+    modelId: 'model-eq-108',
     sku: 'MED-BTH-001',
     name: 'כיסא רחצה ומקלחת עם משענת וידיות אחיזה',
     category: 'hygiene',
@@ -417,6 +492,7 @@ export const INITIAL_EQUIPMENT: EquipmentItem[] = [
   },
   {
     id: 'eq-109',
+    modelId: 'model-eq-109',
     sku: 'MED-PUMP-MED',
     name: 'משאבת חלב אם ברמה של בית חולים (Symphony)',
     category: 'hygiene',
@@ -440,6 +516,7 @@ export const INITIAL_EQUIPMENT: EquipmentItem[] = [
   },
   {
     id: 'eq-110',
+    modelId: 'model-eq-110',
     sku: 'ACC-CHG-STN',
     name: 'עמדת טעינה מהירה ניידת (PowerBank 30,000mAh) + 4 כבלים',
     category: 'comfort',
@@ -463,6 +540,7 @@ export const INITIAL_EQUIPMENT: EquipmentItem[] = [
   },
   {
     id: 'eq-111',
+    modelId: 'model-eq-111',
     sku: 'YAD-MAT-AIR',
     name: 'מזרן דינמי למניעת פצעי לחץ (מערכת אוויר מתחלפת)',
     category: 'medical',
@@ -486,6 +564,7 @@ export const INITIAL_EQUIPMENT: EquipmentItem[] = [
   },
   {
     id: 'eq-112',
+    modelId: 'model-eq-112',
     sku: 'LEV-PED-01',
     name: 'כורסת מלווה מתקפלת לילדים + ערכת משחק וציור',
     category: 'comfort',

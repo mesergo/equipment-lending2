@@ -17,6 +17,13 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // Forward API calls to the local auth server (server/index.ts) during development.
+      proxy: {
+        '/api': {
+          target: `http://localhost:${process.env.AUTH_SERVER_PORT || 4001}`,
+          changeOrigin: true,
+        },
+      },
     },
   };
 });

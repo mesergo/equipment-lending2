@@ -5,12 +5,14 @@ import {
 } from 'lucide-react';
 import { useAppTheme } from '../context/ThemeContext';
 
-export type TabType = 
-  | 'catalog' 
-  | 'cart' 
-  | 'admin' 
-  | 'patient_portal' 
-  | 'sanitization';
+export type TabType =
+  | 'catalog'
+  | 'cart'
+  | 'admin'
+  | 'patient_portal'
+  | 'sanitization'
+  // Reached only via a direct link (e.g. from a WhatsApp reminder), never from the nav bar itself.
+  | 'report_return';
 
 interface NavbarProps {
   activeTab: TabType;

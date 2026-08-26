@@ -32,17 +32,22 @@ import {
   MapPin,
   X
 } from 'lucide-react';
-import { 
-  EquipmentCategory, 
-  EquipmentItem, 
-  EquipmentStatus, 
-  HoldStatus, 
-  Warehouse, 
+import {
+  EquipmentCategory,
+  EquipmentItem,
+  EquipmentStatus,
+  HoldStatus,
+  Warehouse,
   Organization,
-  OrderRecord, 
-  OrderStatus, 
-  Volunteer 
+  OrderRecord,
+  OrderStatus,
+  Volunteer,
+  Product,
+  Model,
+  Branch,
+  Customer,
 } from '../types';
+import type { AuthUser } from '../context/AuthContext';
 import { AddEquipmentModal } from './AddEquipmentModal';
 import { EditEquipmentModal } from './EditEquipmentModal';
 import { useToast } from './Toast';
@@ -54,6 +59,11 @@ interface AdminDashboardViewProps {
   hospitals?: Warehouse[];
   organizations?: Organization[];
   volunteers: Volunteer[];
+  products?: Product[];
+  models?: Model[];
+  branches?: Branch[];
+  customers?: Customer[];
+  currentUser?: AuthUser | null;
   selectedHospitalId: string;
   onAddEquipment: (item: EquipmentItem) => void;
   onUpdateEquipment: (item: EquipmentItem) => void;
@@ -61,9 +71,24 @@ interface AdminDashboardViewProps {
   onUpdateOrderStatus: (orderId: string, newStatus: OrderStatus) => void;
   onUpdateHoldStatus: (orderId: string, newHoldStatus: HoldStatus) => void;
   onAssignVolunteer: (orderId: string, volunteerName: string, volunteerPhone: string) => void;
+  onConfirmReturn: (orderId: string, outcome: 'clean' | 'needs_sanitizing') => void;
   onNavigateToCatalog: () => void;
   onAddWarehouse?: (warehouse: Warehouse) => void;
+  onUpdateWarehouse?: (id: string, patch: Partial<Warehouse>) => void;
+  onDeleteWarehouse?: (id: string) => void;
   onAddOrganization?: (organization: Organization) => void;
+  onAddProduct?: (item: Product) => void;
+  onUpdateProduct?: (id: string, patch: Partial<Product>) => void;
+  onDeleteProduct?: (id: string) => void;
+  onAddModel?: (item: Model) => void;
+  onUpdateModel?: (id: string, patch: Partial<Model>) => void;
+  onDeleteModel?: (id: string) => void;
+  onAddBranch?: (item: Branch) => void;
+  onUpdateBranch?: (id: string, patch: Partial<Branch>) => void;
+  onDeleteBranch?: (id: string) => void;
+  onAddCustomer?: (item: Customer) => void;
+  onUpdateCustomer?: (id: string, patch: Partial<Customer>) => void;
+  onDeleteCustomer?: (id: string) => void;
 }
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
@@ -73,6 +98,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   hospitals,
   organizations = [],
   volunteers,
+  products = [],
+  models = [],
+  branches = [],
+  customers = [],
+  currentUser,
   selectedHospitalId,
   onAddEquipment,
   onUpdateEquipment,
@@ -80,36 +110,78 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   onUpdateOrderStatus,
   onUpdateHoldStatus,
   onAssignVolunteer,
+  onConfirmReturn,
   onNavigateToCatalog,
   onAddWarehouse,
+  onUpdateWarehouse,
+  onDeleteWarehouse,
   onAddOrganization,
+  onAddProduct,
+  onUpdateProduct,
+  onDeleteProduct,
+  onAddModel,
+  onUpdateModel,
+  onDeleteModel,
+  onAddBranch,
+  onUpdateBranch,
+  onDeleteBranch,
+  onAddCustomer,
+  onUpdateCustomer,
+  onDeleteCustomer,
 }) => {
   const { showToast } = useToast();
   const allWarehouses = warehouses || hospitals || [];
+  const todayISODate = new Date().toISOString().slice(0, 10);
+  // For an org_manager the organization is fixed (their own) — never a field they pick.
+  const fixedOrgId = currentUser?.role === 'org_manager' ? currentUser.organizationId : undefined;
 
-  // Admin sub-tabs: 'organizations' | 'inventory' | 'orders' | 'holds' | 'analytics'
-  const [activeTab, setActiveTab] = useState<'organizations' | 'inventory' | 'orders' | 'holds' | 'analytics'>('organizations');
+  // Admin sub-tabs
+  const [activeTab, setActiveTab] = useState<
+    'organizations' | 'inventory' | 'products' | 'branches' | 'customers' | 'orders' | 'holds' | 'analytics'
+  >('organizations');
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<EquipmentItem | null>(null);
   
-  // Add Warehouse Modal
+  // Add Warehouse Modal — no "ארגון" field for an org_manager (their own org is implicit);
+  // hospital/city are now derived from picking a Branch instead of free-typed.
   const [isAddWhModalOpen, setIsAddWhModalOpen] = useState(false);
-  const [targetOrgIdForNewWh, setTargetOrgIdForNewWh] = useState<string>(organizations[0]?.id || 'org-hesed');
+  const [targetOrgIdForNewWh, setTargetOrgIdForNewWh] = useState<string>(fixedOrgId || organizations[0]?.id || 'org-hesed');
   const [newWhName, setNewWhName] = useState('');
-  const [newWhHospital, setNewWhHospital] = useState('המרכז הרפואי שיבא תל השומר');
-  const [newWhCity, setNewWhCity] = useState('רמת גן');
+  const [newWhBranchId, setNewWhBranchId] = useState<string>('');
   const [newWhLocation, setNewWhLocation] = useState('');
   const [newWhManagerName, setNewWhManagerName] = useState('');
   const [newWhManagerPhone, setNewWhManagerPhone] = useState('');
+  const [newWhAccessCode, setNewWhAccessCode] = useState('');
   const [newWhHasLockers, setNewWhHasLockers] = useState(true);
+
+  // Add Branch / Product / Model / Customer forms
+  const [isAddBranchModalOpen, setIsAddBranchModalOpen] = useState(false);
+  const [newBranchName, setNewBranchName] = useState('');
+  const [newBranchCity, setNewBranchCity] = useState('');
+  const [newProductName, setNewProductName] = useState('');
+  const [newProductDescription, setNewProductDescription] = useState('');
+  const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
+  const [addingModelForProductId, setAddingModelForProductId] = useState<string | null>(null);
+  const [newModelName, setNewModelName] = useState('');
+  const [newModelDescription, setNewModelDescription] = useState('');
+  const [newModelImageUrl, setNewModelImageUrl] = useState('');
+  const [newModelDeposit, setNewModelDeposit] = useState<number>(100);
+  const [newModelCost, setNewModelCost] = useState<number>(0);
+  const [newModelMaxLoanDays, setNewModelMaxLoanDays] = useState<number>(21);
+  const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [newCustomerSecondaryPhone, setNewCustomerSecondaryPhone] = useState('');
+  const [newCustomerNotes, setNewCustomerNotes] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
 
   // Filters for inventory
   const [invSearch, setInvSearch] = useState('');
   const [invOrg, setInvOrg] = useState<string>('all');
   const [invWarehouse, setInvWarehouse] = useState<string>('all');
-  const [invCategory, setInvCategory] = useState<EquipmentCategory | 'all'>('all');
+  const [invProduct, setInvProduct] = useState<string>('all');
   const [invStatus, setInvStatus] = useState<EquipmentStatus | 'all'>('all');
 
   // Filters for orders
@@ -121,6 +193,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [holdSearch, setHoldSearch] = useState('');
   const [holdStatusFilter, setHoldStatusFilter] = useState<HoldStatus | 'all'>('all');
 
+  // Model/Product lookup helpers (the new hierarchy — see src/types/index.ts)
+  const getModelForItem = (item: EquipmentItem): Model | undefined =>
+    item.modelId ? models.find((m) => m.id === item.modelId) : undefined;
+  const getProductForModel = (model?: Model): Product | undefined =>
+    model ? products.find((p) => p.id === model.productId) : undefined;
+
+  // Branches belonging to whichever organization a new warehouse/product/model is being created
+  // for (the org_manager's own org, or whichever org is selected in the warehouse form).
+  const orgBranches = branches.filter((b) => b.organizationId === (fixedOrgId || targetOrgIdForNewWh));
+
   // Filtered Inventory
   const filteredEquipment = equipment.filter((item) => {
     if (invOrg !== 'all') {
@@ -130,7 +212,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (invWarehouse !== 'all') {
       if (item.warehouseId !== invWarehouse && item.hospitalId !== invWarehouse) return false;
     }
-    if (invCategory !== 'all' && item.category !== invCategory) return false;
+    if (invProduct !== 'all') {
+      const model = getModelForItem(item);
+      if (model?.productId !== invProduct) return false;
+    }
     if (invStatus !== 'all' && item.status !== invStatus) return false;
     if (invSearch.trim()) {
       const q = invSearch.toLowerCase();
@@ -144,6 +229,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
     return true;
   });
+
+  // Stock is always derived from SKU (EquipmentItem) status/counts — never typed in directly by
+  // an admin — per the client's "אנחנו לא שמים מלאי, זה צריך להתעדכן אוטומטית" request.
+  const warehouseStockSummary = allWarehouses.map((wh) => {
+    const items = equipment.filter((e) => e.warehouseId === wh.id || e.hospitalId === wh.id);
+    const available = items.reduce((acc, i) => acc + i.stockAvailable, 0);
+    const total = items.reduce((acc, i) => acc + i.stockTotal, 0);
+    return { warehouse: wh, available, loaned: total - available, total };
+  });
+  const cumulativeLoansCount = orders.length;
 
   // Filtered Orders
   const filteredOrders = orders.filter((ord) => {
@@ -196,18 +291,22 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     e.preventDefault();
     if (!newWhName.trim()) return;
 
-    const parentOrg = organizations.find(o => o.id === targetOrgIdForNewWh);
+    const effectiveOrgId = fixedOrgId || targetOrgIdForNewWh;
+    const parentOrg = organizations.find(o => o.id === effectiveOrgId);
+    const branch = branches.find((b) => b.id === newWhBranchId) || orgBranches[0];
     const newWh: Warehouse = {
       id: `wh-${Date.now()}`,
       code: `WH-${Math.floor(100 + Math.random() * 900)}`,
       name: newWhName,
-      organizationId: targetOrgIdForNewWh,
+      organizationId: effectiveOrgId,
       organizationName: parentOrg?.name || 'עמותת חסד',
-      hospitalName: newWhHospital,
-      city: newWhCity,
+      branchId: branch?.id,
+      hospitalName: branch?.name || 'מרכז רפואי',
+      city: branch?.city,
       location: newWhLocation || 'מתחם מרכזי',
       managerName: newWhManagerName || 'רכז מוקד',
       managerPhone: newWhManagerPhone || '050-0000000',
+      accessCode: newWhAccessCode || undefined,
       activeVolunteersCount: 5,
       hasSmartLockers: newWhHasLockers,
       sections: ['עמדת ניפוק ראשית', 'ארון חירום', 'מדף עזרים'],
@@ -217,10 +316,97 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (onAddWarehouse) {
       onAddWarehouse(newWh);
     }
-    showToast('מחסן חדש הוקם ושויך לארגון!', newWh.name, 'success');
     setIsAddWhModalOpen(false);
     setNewWhName('');
     setNewWhLocation('');
+    setNewWhAccessCode('');
+  };
+
+  // --- Branch CRUD ---
+  const handleCreateBranch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBranchName.trim()) return;
+    const effectiveOrgId = fixedOrgId || targetOrgIdForNewWh || organizations[0]?.id || 'org-hesed';
+    const parentOrg = organizations.find((o) => o.id === effectiveOrgId);
+    const newBranch: Branch = {
+      id: `branch-${Date.now()}`,
+      organizationId: effectiveOrgId,
+      organizationName: parentOrg?.name,
+      name: newBranchName,
+      city: newBranchCity || undefined,
+    };
+    onAddBranch?.(newBranch);
+    showToast('סניף חדש נוסף', newBranch.name, 'success');
+    setIsAddBranchModalOpen(false);
+    setNewBranchName('');
+    setNewBranchCity('');
+  };
+
+  // --- Product CRUD ---
+  const handleCreateProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProductName.trim()) return;
+    const effectiveOrgId = fixedOrgId || targetOrgIdForNewWh || organizations[0]?.id || 'org-hesed';
+    const newProduct: Product = {
+      id: `prod-${Date.now()}`,
+      organizationId: effectiveOrgId,
+      name: newProductName,
+      description: newProductDescription || undefined,
+    };
+    onAddProduct?.(newProduct);
+    showToast('מוצר חדש נוסף', newProduct.name, 'success');
+    setNewProductName('');
+    setNewProductDescription('');
+  };
+
+  // --- Model CRUD (added under a specific product) ---
+  const handleCreateModel = (e: React.FormEvent, productId: string) => {
+    e.preventDefault();
+    if (!newModelName.trim()) return;
+    const product = products.find((p) => p.id === productId);
+    const newModel: Model = {
+      id: `model-${Date.now()}`,
+      productId,
+      organizationId: product?.organizationId || fixedOrgId || 'org-hesed',
+      name: newModelName,
+      description: newModelDescription || undefined,
+      imageUrl: newModelImageUrl || undefined,
+      depositAmount: Number(newModelDeposit) || 0,
+      internalCost: newModelCost ? Number(newModelCost) : undefined,
+      maxLoanDays: Number(newModelMaxLoanDays) || 14,
+    };
+    onAddModel?.(newModel);
+    showToast('דגם חדש נוסף למוצר', newModel.name, 'success');
+    setNewModelName('');
+    setNewModelDescription('');
+    setNewModelImageUrl('');
+    setNewModelDeposit(100);
+    setNewModelCost(0);
+    setNewModelMaxLoanDays(21);
+    setAddingModelForProductId(null);
+  };
+
+  // --- Customer CRUD ---
+  const handleCreateCustomer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCustomerName.trim() || !newCustomerPhone.trim()) return;
+    const effectiveOrgId = fixedOrgId || targetOrgIdForNewWh || organizations[0]?.id;
+    const newCustomer: Customer = {
+      id: `cust-${Date.now()}`,
+      organizationId: effectiveOrgId,
+      fullName: newCustomerName,
+      mobilePhone: newCustomerPhone,
+      secondaryPhone: newCustomerSecondaryPhone || undefined,
+      notes: newCustomerNotes || undefined,
+      createdAt: new Date().toISOString(),
+    };
+    onAddCustomer?.(newCustomer);
+    showToast('לקוח חדש נוסף', newCustomer.fullName, 'success');
+    setIsAddCustomerModalOpen(false);
+    setNewCustomerName('');
+    setNewCustomerPhone('');
+    setNewCustomerSecondaryPhone('');
+    setNewCustomerNotes('');
   };
 
   // Summary Metrics
@@ -336,7 +522,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       <div className="flex items-center gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
         {[
           { id: 'organizations', label: 'ארגונים ומחסנים בבתי חולים', icon: Building2, count: organizations.length },
-          { id: 'inventory', label: 'ניהול ציוד ומלאי', icon: Package, count: equipment.length },
+          { id: 'inventory', label: 'ניהול ציוד ומלאי (מק"ט)', icon: Package, count: equipment.length },
+          { id: 'products', label: 'מוצרים ודגמים', icon: Layers, count: products.length },
+          { id: 'branches', label: 'סניפים', icon: MapPin, count: branches.length },
+          { id: 'customers', label: 'לקוחות', icon: User, count: customers.length },
           { id: 'orders', label: 'ניהול הזמנות והשאלות', icon: ShoppingCart, count: orders.length },
           { id: 'holds', label: 'תפיסות מסגרת אשראי', icon: CreditCard, count: orders.filter(o => o.holdStatus === 'held').length },
           { id: 'analytics', label: 'דוחות וסטטיסטיקות', icon: BarChart3 },
@@ -553,16 +742,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </select>
 
               <select
-                value={invCategory}
-                onChange={(e) => setInvCategory(e.target.value as any)}
+                value={invProduct}
+                onChange={(e) => setInvProduct(e.target.value)}
                 className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-teal-600"
               >
-                <option value="all">כל הקטגוריות</option>
-                <option value="mobility">ניידות ושיקום</option>
-                <option value="medical">מכשור רפואי ונשימתי</option>
-                <option value="comfort">שהייה ולינת מלווים</option>
-                <option value="sabbath">ערכות שבת</option>
-                <option value="hygiene">רחצה ויולדות</option>
+                <option value="all">כל המוצרים</option>
+                {products
+                  .filter((p) => invOrg === 'all' || p.organizationId === invOrg)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
               </select>
 
               <select
@@ -571,10 +760,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-teal-600"
               >
                 <option value="all">כל הסטטוסים</option>
-                <option value="available">זמין במלאי</option>
-                <option value="loaned">מושאל כעת</option>
+                <option value="available">זמין</option>
+                <option value="unavailable">לא זמין</option>
+                <option value="on_loan">בהשאלה</option>
+                <option value="faulty_pending_inspection">תקול וממתין לבדיקה</option>
                 <option value="sanitizing">בחיטוי ובדיקה</option>
-                <option value="maintenance">בתיקון/תחזוקה</option>
               </select>
             </div>
 
@@ -589,9 +779,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                     <th className="p-4">תמונה</th>
                     <th className="p-4">מק״ט ושם פריט</th>
                     <th className="p-4">ארגון ומחסן</th>
-                    <th className="p-4">קטגוריה</th>
+                    <th className="p-4">מוצר / דגם</th>
                     <th className="p-4 text-center">מלאי (זמין / כולל)</th>
-                    <th className="p-4 text-center">מסגרת ביטחון</th>
+                    <th className="p-4 text-center">פיקדון (מהדגם)</th>
                     <th className="p-4">סטטוס</th>
                     <th className="p-4 text-center">פעולות</th>
                   </tr>
@@ -600,15 +790,18 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   {filteredEquipment.map((item) => {
                     const warehouse = allWarehouses.find((w) => w.id === (item.warehouseId || item.hospitalId));
                     const orgName = item.organizationName || warehouse?.organizationName || 'עמותת חסד';
+                    const model = getModelForItem(item);
+                    const product = getProductForModel(model);
+                    const thumbUrl = item.photoUrl || model?.imageUrl;
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                        
-                        {/* Thumbnail */}
+
+                        {/* Thumbnail — pulled from the Model, not entered per-SKU */}
                         <td className="p-4">
                           <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
-                            {item.photoUrl ? (
-                              <img src={item.photoUrl} alt={item.name} className="w-full h-full object-cover" />
+                            {thumbUrl ? (
+                              <img src={thumbUrl} alt={item.name} className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-slate-300">
                                 <Package className="w-5 h-5" />
@@ -640,13 +833,10 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           </div>
                         </td>
 
-                        {/* Category */}
+                        {/* Product / Model (replaces the old fixed 5-value category) */}
                         <td className="p-4 text-slate-600">
-                          {item.category === 'mobility' && 'ניידות ושיקום'}
-                          {item.category === 'medical' && 'רפואי ונשימתי'}
-                          {item.category === 'comfort' && 'שהייה ולינה'}
-                          {item.category === 'sabbath' && 'ערכות שבת'}
-                          {item.category === 'hygiene' && 'רחצה ויולדות'}
+                          <div className="font-bold text-slate-800">{product?.name || '—'}</div>
+                          <div className="text-[11px] text-slate-500">{model?.name || 'לא משויך לדגם'}</div>
                         </td>
 
                         {/* Stock */}
@@ -657,9 +847,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           <span className="text-slate-400"> / {item.stockTotal}</span>
                         </td>
 
-                        {/* Frame Hold */}
+                        {/* Deposit — lives on the Model now, not typed per-SKU */}
                         <td className="p-4 text-center font-bold text-slate-800">
-                          ₪{item.depositAmount}
+                          ₪{model?.depositAmount ?? item.depositAmount}
                         </td>
 
                         {/* Status */}
@@ -667,14 +857,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                           <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
                             item.status === 'available'
                               ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                              : item.status === 'loaned'
+                              : item.status === 'on_loan'
                               ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                              : item.status === 'faulty_pending_inspection'
+                              ? 'bg-rose-50 text-rose-800 border border-rose-200'
                               : 'bg-slate-100 text-slate-700 border border-slate-200'
                           }`}>
-                            {item.status === 'available' && 'זמין להשאלה'}
-                            {item.status === 'loaned' && 'מושאל כעת'}
+                            {item.status === 'available' && 'זמין'}
+                            {item.status === 'unavailable' && 'לא זמין'}
+                            {item.status === 'on_loan' && 'בהשאלה'}
+                            {item.status === 'faulty_pending_inspection' && 'תקול וממתין לבדיקה'}
                             {item.status === 'sanitizing' && 'בחיטוי ובדיקה'}
-                            {item.status === 'maintenance' && 'בתיקון/מעבדה'}
                           </span>
                         </td>
 
@@ -711,6 +904,309 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* TAB: Products & Models ("מוצרים ודגמים") — the hierarchy above SKU. A Product is a
+          product type (e.g. "כיסא גלגלים"); each Model under it has its own image, description,
+          deposit and internal cost — those never live on the SKU/מק"ט itself. */}
+      {activeTab === 'products' && (
+        <div className="space-y-4">
+          {!fixedOrgId && organizations.length > 1 && (
+            <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm">
+              <label className="block text-slate-700 font-bold mb-1 text-xs">עבור איזה ארגון להוסיף?</label>
+              <select
+                value={targetOrgIdForNewWh}
+                onChange={(e) => setTargetOrgIdForNewWh(e.target.value)}
+                className="w-full sm:w-64 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:outline-none focus:border-teal-600"
+              >
+                {organizations.map((org) => (
+                  <option key={org.id} value={org.id}>{org.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <form onSubmit={handleCreateProduct} className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col sm:flex-row items-end gap-3">
+            <div className="flex-1 w-full">
+              <label className="block text-slate-700 font-bold mb-1 text-xs">מוצר חדש (למשל: כיסא גלגלים)</label>
+              <input
+                type="text"
+                required
+                value={newProductName}
+                onChange={(e) => setNewProductName(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
+              />
+            </div>
+            <div className="flex-1 w-full">
+              <label className="block text-slate-700 font-bold mb-1 text-xs">תיאור (רשות)</label>
+              <input
+                type="text"
+                value={newProductDescription}
+                onChange={(e) => setNewProductDescription(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
+              />
+            </div>
+            <button type="submit" className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-black shadow-md shadow-teal-700/20 flex items-center gap-1.5 shrink-0">
+              <Plus className="w-4 h-4" />
+              <span>הוסף מוצר</span>
+            </button>
+          </form>
+
+          <div className="space-y-3">
+            {products.map((product) => {
+              const productModels = models.filter((m) => m.productId === product.id);
+              const isExpanded = expandedProductId === product.id;
+              return (
+                <div key={product.id} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+                  <button
+                    onClick={() => setExpandedProductId(isExpanded ? null : product.id)}
+                    className="w-full p-4 flex items-center justify-between gap-3 hover:bg-slate-50 transition-colors text-right"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center border border-teal-200">
+                        <Layers className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-extrabold text-slate-900 text-sm">{product.name}</div>
+                        {product.description && <div className="text-[11px] text-slate-500">{product.description}</div>}
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
+                      {productModels.length} דגמים
+                    </span>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="border-t border-slate-100 p-4 space-y-3 bg-slate-50/50">
+                      {productModels.map((model) => (
+                        <div key={model.id} className="p-3 bg-white border border-slate-200 rounded-2xl flex items-start gap-3">
+                          <div className="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
+                            {model.imageUrl ? (
+                              <img src={model.imageUrl} alt={model.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                <Package className="w-5 h-5" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 space-y-1">
+                            <div className="font-bold text-slate-900 text-xs">{model.name}</div>
+                            {model.description && <div className="text-[11px] text-slate-500">{model.description}</div>}
+                            <div className="flex flex-wrap items-center gap-3 text-[11px] pt-1">
+                              <span className="font-bold text-teal-700">פיקדון: ₪{model.depositAmount}</span>
+                              {typeof model.internalCost === 'number' && (
+                                <span className="text-slate-400">עלות פנימית: ₪{model.internalCost}</span>
+                              )}
+                              <span className="text-slate-500">עד {model.maxLoanDays} ימי השאלה</span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              if (confirm(`למחוק את הדגם ${model.name}?`)) onDeleteModel?.(model.id);
+                            }}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors shrink-0"
+                            title="מחק דגם"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+
+                      {addingModelForProductId === product.id ? (
+                        <form onSubmit={(e) => handleCreateModel(e, product.id)} className="p-4 bg-white border border-teal-200 rounded-2xl space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-slate-700 font-bold mb-1 text-[11px]">שם הדגם *</label>
+                              <input type="text" required value={newModelName} onChange={(e) => setNewModelName(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-teal-600" />
+                            </div>
+                            <div>
+                              <label className="block text-slate-700 font-bold mb-1 text-[11px]">תמונת הדגם (URL)</label>
+                              <input type="url" value={newModelImageUrl} onChange={(e) => setNewModelImageUrl(e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono focus:outline-none focus:border-teal-600" />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-slate-700 font-bold mb-1 text-[11px]">תיאור קצר של הדגם</label>
+                            <textarea rows={2} value={newModelDescription} onChange={(e) => setNewModelDescription(e.target.value)}
+                              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs focus:outline-none focus:border-teal-600" />
+                          </div>
+                          <div className="grid grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-slate-700 font-bold mb-1 text-[11px]">פיקדון (₪)</label>
+                              <input type="number" min={0} value={newModelDeposit} onChange={(e) => setNewModelDeposit(Number(e.target.value))}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-teal-600" />
+                            </div>
+                            <div>
+                              <label className="block text-slate-700 font-bold mb-1 text-[11px]">עלות פנימית (₪, לא מוצג ללקוח)</label>
+                              <input type="number" min={0} value={newModelCost} onChange={(e) => setNewModelCost(Number(e.target.value))}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-teal-600" />
+                            </div>
+                            <div>
+                              <label className="block text-slate-700 font-bold mb-1 text-[11px]">ימי השאלה מרביים</label>
+                              <input type="number" min={1} value={newModelMaxLoanDays} onChange={(e) => setNewModelMaxLoanDays(Number(e.target.value))}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-teal-600" />
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-end gap-2 pt-1">
+                            <button type="button" onClick={() => setAddingModelForProductId(null)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 text-xs">ביטול</button>
+                            <button type="submit" className="px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-black text-xs">שמור דגם</button>
+                          </div>
+                        </form>
+                      ) : (
+                        <button
+                          onClick={() => setAddingModelForProductId(product.id)}
+                          className="text-teal-700 hover:text-teal-800 text-xs font-bold flex items-center gap-1.5"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>הוסף דגם חדש למוצר זה</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => {
+                          if (confirm(`למחוק את המוצר ${product.name}? (רק אם אין תחתיו דגמים)`)) onDeleteProduct?.(product.id);
+                        }}
+                        className="text-rose-600 hover:text-rose-700 text-[11px] font-bold flex items-center gap-1"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>מחק מוצר</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {products.length === 0 && (
+              <div className="text-center py-10 text-slate-400 text-xs">אין עדיין מוצרים — הוסיפו מוצר ראשון למעלה.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: Branches ("סניפים") — the physical site/hospital a warehouse serves. */}
+      {activeTab === 'branches' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-black text-slate-900">סניפים</h2>
+              <p className="text-xs text-slate-500">בתי חולים / מרכזים רפואיים שבהם פועלים המחסנים של הארגון</p>
+            </div>
+            <button
+              onClick={() => setIsAddBranchModalOpen(true)}
+              className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              <span>הוסף סניף</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {branches.map((branch) => {
+              const branchWarehouses = allWarehouses.filter((w) => w.branchId === branch.id);
+              return (
+                <div key={branch.id} className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-extrabold text-slate-900 text-sm flex items-center gap-1.5">
+                        <MapPin className="w-4 h-4 text-teal-600" />
+                        <span>{branch.name}</span>
+                      </div>
+                      {branch.city && <div className="text-[11px] text-slate-500">{branch.city}</div>}
+                    </div>
+                    {branch.isDefault && (
+                      <span className="text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded-full">ברירת מחדל</span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-500">{branchWarehouses.length} מחסנים בסניף זה</div>
+                  <button
+                    onClick={() => {
+                      if (confirm(`למחוק את הסניף ${branch.name}?`)) onDeleteBranch?.(branch.id);
+                    }}
+                    className="text-rose-600 hover:text-rose-700 text-[11px] font-bold flex items-center gap-1 pt-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>מחק סניף</span>
+                  </button>
+                </div>
+              );
+            })}
+            {branches.length === 0 && (
+              <div className="col-span-full text-center py-10 text-slate-400 text-xs">אין עדיין סניפים — הוסיפו סניף ראשון.</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB: Customers ("לקוחות") — identified by mobile phone only; no ID number, no email. */}
+      {activeTab === 'customers' && (
+        <div className="space-y-4">
+          <div className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="relative flex-1 w-full">
+              <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="חיפוש לקוח לפי שם או טלפון..."
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl pr-10 pl-4 py-2 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
+              />
+            </div>
+            <button
+              onClick={() => setIsAddCustomerModalOpen(true)}
+              className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-sm shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>הוסף לקוח</span>
+            </button>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
+                  <tr>
+                    <th className="p-4">שם מלא</th>
+                    <th className="p-4">טלפון נייד</th>
+                    <th className="p-4">טלפון נוסף</th>
+                    <th className="p-4">הערות</th>
+                    <th className="p-4 text-center">פעולות</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {customers
+                    .filter((c) => {
+                      if (!customerSearch.trim()) return true;
+                      const q = customerSearch.toLowerCase();
+                      return c.fullName.toLowerCase().includes(q) || c.mobilePhone.includes(q);
+                    })
+                    .map((c) => (
+                      <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-4 font-extrabold text-slate-900">{c.fullName}</td>
+                        <td className="p-4 font-mono text-teal-700">{c.mobilePhone}</td>
+                        <td className="p-4 font-mono text-slate-500">{c.secondaryPhone || '—'}</td>
+                        <td className="p-4 text-slate-600 max-w-[220px] truncate">{c.notes || '—'}</td>
+                        <td className="p-4 text-center">
+                          <button
+                            onClick={() => {
+                              if (confirm(`למחוק את הלקוח ${c.fullName}?`)) onDeleteCustomer?.(c.id);
+                            }}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors"
+                            title="מחק לקוח"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+              {customers.length === 0 && (
+                <div className="text-center py-10 text-slate-400 text-xs">אין עדיין לקוחות רשומים.</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -752,7 +1248,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 <option value="pending_dispatch">ממתין לשינוע</option>
                 <option value="in_transit">בשינוע לחדר</option>
                 <option value="active_in_ward">פעיל במחלקה</option>
+                <option value="return_reported">דווח כהוחזר — ממתין לבדיקה</option>
                 <option value="returned_clean">הוחזר ושוחרר</option>
+                <option value="returned_sanitizing">הוחזר, בתהליך חיטוי</option>
               </select>
             </div>
           </div>
@@ -774,8 +1272,19 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {ord.orderStatus === 'active_in_ward' && ord.expectedReturnDate && (
+                      <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold font-mono ${
+                        ord.expectedReturnDate < todayISODate
+                          ? 'bg-rose-50 text-rose-800 border border-rose-200'
+                          : 'bg-slate-50 text-slate-600 border border-slate-200'
+                      }`}>
+                        יעד החזרה: {ord.expectedReturnDate}
+                      </span>
+                    )}
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      ord.orderStatus === 'active_in_ward'
+                      ord.orderStatus === 'return_reported'
+                        ? 'bg-amber-100 text-amber-900 border border-amber-300 animate-pulse'
+                        : ord.orderStatus === 'active_in_ward'
                         ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                         : ord.orderStatus === 'in_transit'
                         ? 'bg-amber-50 text-amber-800 border border-amber-200'
@@ -784,7 +1293,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       {ord.orderStatus === 'active_in_ward' && '✓ פעיל בחדר המאושפז'}
                       {ord.orderStatus === 'in_transit' && '🚚 בשינוע ע״י מתנדב'}
                       {ord.orderStatus === 'pending_dispatch' && '⏳ ממתין לשינוע'}
+                      {ord.orderStatus === 'return_reported' && '🔔 הלקוח דיווח שהחזיר — ממתין לבדיקה'}
                       {ord.orderStatus === 'returned_clean' && '✓ הוחזר ונבדק'}
+                      {ord.orderStatus === 'returned_sanitizing' && '🧼 הוחזר, בתהליך חיטוי'}
                     </span>
                   </div>
                 </div>
@@ -867,6 +1378,26 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                       >
                         אושר מסירה בחדר
                       </button>
+                    )}
+
+                    {ord.orderStatus === 'return_reported' && (
+                      <>
+                        <button
+                          onClick={() => onConfirmReturn(ord.id, 'clean')}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-colors flex items-center gap-1.5"
+                          title="הציוד נבדק פיזית ותקין — משחרר למלאי הזמין"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>אישור בדיקה — הציוד תקין</span>
+                        </button>
+                        <button
+                          onClick={() => onConfirmReturn(ord.id, 'needs_sanitizing')}
+                          className="px-4 py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-xl font-bold transition-colors"
+                          title="הציוד הוחזר אך דורש חיטוי לפני חזרה למלאי"
+                        >
+                          אישור בדיקה — נדרש חיטוי
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -997,8 +1528,49 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 
       {/* TAB 4: Analytics & Insights */}
       {activeTab === 'analytics' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          
+        <div className="space-y-6">
+
+          {/* Dashboard summary: loaned-vs-available stock per warehouse (derived from SKU
+              status, never typed in by hand) + a cumulative all-time loans counter. */}
+          <div className="p-6 bg-white border border-slate-200 rounded-3xl space-y-4 shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                <Boxes className="w-4 h-4 text-teal-600" />
+                <span>טבלת סיכום מצב ציוד לפי מחסן</span>
+              </h3>
+              <span className="text-xs font-bold text-teal-700 bg-teal-50 px-3 py-1 rounded-full border border-teal-200">
+                סה״כ השאלות מצטבר: {cumulativeLoansCount}
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-xs">
+                <thead className="text-slate-500 font-bold border-b border-slate-100">
+                  <tr>
+                    <th className="py-2 pl-2">מחסן</th>
+                    <th className="py-2 text-center">זמין</th>
+                    <th className="py-2 text-center">מושאל</th>
+                    <th className="py-2 text-center">סה״כ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {warehouseStockSummary.map(({ warehouse, available, loaned, total }) => (
+                    <tr key={warehouse.id}>
+                      <td className="py-2 font-bold text-slate-800">{warehouse.name}</td>
+                      <td className="py-2 text-center font-black text-emerald-700">{available}</td>
+                      <td className="py-2 text-center font-black text-amber-700">{loaned}</td>
+                      <td className="py-2 text-center text-slate-500">{total}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {warehouseStockSummary.length === 0 && (
+                <div className="text-center py-6 text-slate-400 text-xs">אין עדיין מחסנים.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
           {/* Category Demand breakdown */}
           <div className="p-6 bg-white border border-slate-200 rounded-3xl space-y-4 shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -1056,6 +1628,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
           </div>
 
+          </div>
         </div>
       )}
 
@@ -1079,18 +1652,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             </div>
 
             <form onSubmit={handleCreateWarehouse} className="p-6 space-y-4 text-xs text-right">
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">שיוך לארגון בעלים *</label>
-                <select
-                  value={targetOrgIdForNewWh}
-                  onChange={(e) => setTargetOrgIdForNewWh(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-teal-600"
-                >
-                  {organizations.map((org) => (
-                    <option key={org.id} value={org.id}>{org.name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* No "ארגון" field for an org_manager — their own organization is implicit. */}
+              {!fixedOrgId && (
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">שיוך לארגון בעלים *</label>
+                  <select
+                    value={targetOrgIdForNewWh}
+                    onChange={(e) => {
+                      setTargetOrgIdForNewWh(e.target.value);
+                      setNewWhBranchId('');
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-teal-600"
+                  >
+                    {organizations.map((org) => (
+                      <option key={org.id} value={org.id}>{org.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-slate-700 font-bold mb-1">שם המחסן / המוקד *</label>
@@ -1104,27 +1683,22 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">בית חולים / מרכז רפואי *</label>
-                  <input
-                    type="text"
-                    required
-                    value={newWhHospital}
-                    onChange={(e) => setNewWhHospital(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">עיר</label>
-                  <input
-                    type="text"
-                    value={newWhCity}
-                    onChange={(e) => setNewWhCity(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
-                  />
-                </div>
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">סניף (בית חולים / מרכז רפואי) *</label>
+                <select
+                  required
+                  value={newWhBranchId}
+                  onChange={(e) => setNewWhBranchId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
+                >
+                  <option value="">בחר סניף...</option>
+                  {orgBranches.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}{b.city ? ` (${b.city})` : ''}</option>
+                  ))}
+                </select>
+                {orgBranches.length === 0 && (
+                  <p className="text-[11px] text-amber-700 mt-1">אין עדיין סניפים לארגון זה — הוסיפו סניף בלשונית "סניפים" לפני יצירת המחסן.</p>
+                )}
               </div>
 
               <div>
@@ -1162,6 +1736,17 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 </div>
               </div>
 
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">קוד גישה (רשות)</label>
+                <input
+                  type="text"
+                  placeholder="לא חובה"
+                  value={newWhAccessCode}
+                  onChange={(e) => setNewWhAccessCode(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 font-mono focus:outline-none focus:border-teal-600"
+                />
+              </div>
+
               <div className="pt-2">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
@@ -1194,6 +1779,86 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       )}
 
+      {/* Add Branch Modal */}
+      {isAddBranchModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center">
+                  <MapPin className="w-5 h-5" />
+                </div>
+                <h2 className="text-base font-black text-slate-900">הוספת סניף חדש</h2>
+              </div>
+              <button onClick={() => setIsAddBranchModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-700 rounded-xl">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateBranch} className="p-6 space-y-4 text-xs text-right">
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">שם הסניף (בית חולים / מרכז רפואי) *</label>
+                <input type="text" required value={newBranchName} onChange={(e) => setNewBranchName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600" />
+              </div>
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">עיר</label>
+                <input type="text" value={newBranchCity} onChange={(e) => setNewBranchCity(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600" />
+              </div>
+              <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-200">
+                <button type="button" onClick={() => setIsAddBranchModalOpen(false)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-slate-100">ביטול</button>
+                <button type="submit" className="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-black shadow-md shadow-teal-700/20">שמור סניף</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Customer Modal */}
+      {isAddCustomerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-teal-100 text-teal-700 flex items-center justify-center">
+                  <User className="w-5 h-5" />
+                </div>
+                <h2 className="text-base font-black text-slate-900">הוספת לקוח חדש</h2>
+              </div>
+              <button onClick={() => setIsAddCustomerModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-700 rounded-xl">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateCustomer} className="p-6 space-y-4 text-xs text-right">
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">שם מלא *</label>
+                <input type="text" required value={newCustomerName} onChange={(e) => setNewCustomerName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600" />
+              </div>
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">טלפון נייד *</label>
+                <input type="tel" required value={newCustomerPhone} onChange={(e) => setNewCustomerPhone(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 font-mono focus:outline-none focus:border-teal-600" />
+              </div>
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">טלפון נוסף (רשות)</label>
+                <input type="tel" value={newCustomerSecondaryPhone} onChange={(e) => setNewCustomerSecondaryPhone(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 font-mono focus:outline-none focus:border-teal-600" />
+              </div>
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">הערות (רשות)</label>
+                <textarea rows={2} value={newCustomerNotes} onChange={(e) => setNewCustomerNotes(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600" />
+              </div>
+              <div className="pt-2 flex items-center justify-end gap-3 border-t border-slate-200">
+                <button type="button" onClick={() => setIsAddCustomerModalOpen(false)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-bold hover:bg-slate-100">ביטול</button>
+                <button type="submit" className="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-black shadow-md shadow-teal-700/20">שמור לקוח</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Add Equipment Modal */}
       <AddEquipmentModal
         isOpen={isAddModalOpen}
@@ -1201,6 +1866,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         hospitals={allWarehouses}
         warehouses={allWarehouses}
         organizations={organizations}
+        products={products}
+        models={models}
         onAdd={(item) => {
           onAddEquipment(item);
           showToast('פריט נוסף בהצלחה לקטלוג!', item.name, 'success');
@@ -1215,6 +1882,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         hospitals={allWarehouses}
         warehouses={allWarehouses}
         organizations={organizations}
+        products={products}
+        models={models}
         onSave={(updated) => {
           onUpdateEquipment(updated);
           showToast('פרטי הפריט והמלאי נשמרו בהצלחה', updated.name, 'success');

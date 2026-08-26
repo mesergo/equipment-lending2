@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, Plus, Package, Building2, Boxes, Tag, Shield, FileText, Image as ImageIcon } from 'lucide-react';
-import { EquipmentCategory, EquipmentItem, Warehouse, Organization } from '../types';
+import { X, Plus } from 'lucide-react';
+import { EquipmentItem, Warehouse, Organization, Product, Model } from '../types';
 
 interface AddEquipmentModalProps {
   isOpen: boolean;
@@ -8,6 +8,8 @@ interface AddEquipmentModalProps {
   hospitals?: Warehouse[];
   warehouses?: Warehouse[];
   organizations?: Organization[];
+  products?: Product[];
+  models?: Model[];
   onAdd: (item: EquipmentItem) => void;
 }
 
@@ -17,36 +19,38 @@ export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({
   hospitals,
   warehouses,
   organizations = [],
+  products = [],
+  models = [],
   onAdd,
 }) => {
   const allWarehouses = warehouses || hospitals || [];
   const [name, setName] = useState('');
   const [sku, setSku] = useState(`MED-${Math.floor(100 + Math.random() * 900)}`);
-  const [category, setCategory] = useState<EquipmentCategory>('mobility');
+  const [modelId, setModelId] = useState('');
   const [selectedOrgId, setSelectedOrgId] = useState<string>(organizations[0]?.id || allWarehouses[0]?.organizationId || 'org-hesed');
   const [warehouseId, setWarehouseId] = useState(allWarehouses[0]?.id || 'main');
   const [depotLocation, setDepotLocation] = useState('מוקד ראשי - מדף א׳');
   const [description, setDescription] = useState('');
   const [specsText, setSpecsText] = useState('קל משקל, מתקפל, עמיד במים');
   const [stockTotal, setStockTotal] = useState<number>(5);
-  const [depositAmount, setDepositAmount] = useState<number>(100);
-  const [maxLoanDays, setMaxLoanDays] = useState<number>(21);
-  const [photoUrl, setPhotoUrl] = useState('https://images.unsplash.com/photo-1576765608535-5f04d1e3f289?w=700&auto=format&fit=crop&q=80');
-  const [isUrgentSabbath, setIsUrgentSabbath] = useState(false);
-  const [featured, setFeatured] = useState(false);
 
   if (!isOpen) return null;
 
-  const filteredWarehouses = selectedOrgId === 'all' 
-    ? allWarehouses 
+  const filteredWarehouses = selectedOrgId === 'all'
+    ? allWarehouses
     : allWarehouses.filter(w => !w.organizationId || w.organizationId === selectedOrgId);
 
   const selectedWarehouse = allWarehouses.find(w => w.id === warehouseId) || allWarehouses[0];
   const selectedOrg = organizations.find(o => o.id === (selectedOrgId || selectedWarehouse?.organizationId));
 
+  // Models available for whichever org is selected, grouped by their Product ("מוצר").
+  const orgModels = models.filter((m) => !selectedOrgId || selectedOrgId === 'all' || m.organizationId === selectedOrgId);
+  const orgProducts = products.filter((p) => orgModels.some((m) => m.productId === p.id));
+  const selectedModel = models.find((m) => m.id === modelId);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !sku.trim()) return;
+    if (!name.trim() || !sku.trim() || !modelId) return;
 
     const fullSpecs = specsText
       .split(',')
@@ -57,7 +61,7 @@ export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({
       id: `eq-${Date.now()}`,
       sku,
       name,
-      category,
+      modelId,
       organizationId: selectedOrg?.id || selectedWarehouse?.organizationId || 'org-hesed',
       organizationName: selectedOrg?.name || selectedWarehouse?.organizationName || 'עמותת חסד ומרפא',
       warehouseId,
@@ -70,11 +74,15 @@ export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({
       condition: 'new',
       stockTotal: Number(stockTotal),
       stockAvailable: Number(stockTotal),
-      depositAmount: Number(depositAmount),
-      maxLoanDays: Number(maxLoanDays),
-      photoUrl: photoUrl || undefined,
-      isUrgentSabbath,
-      featured,
+      // Deposit, max loan days, image, weight capacity and the Sabbath/featured flags all live on
+      // the Model now (see src/components/AdminDashboardView.tsx's "מוצרים ודגמים" tab) — never
+      // typed in per-SKU, so this new item just inherits whatever the chosen Model has.
+      depositAmount: selectedModel?.depositAmount ?? 0,
+      maxLoanDays: selectedModel?.maxLoanDays ?? 14,
+      photoUrl: selectedModel?.imageUrl,
+      isUrgentSabbath: selectedModel?.isUrgentSabbath,
+      featured: selectedModel?.featured,
+      weightCapacityKg: selectedModel?.weightCapacityKg,
       lastSanitizedAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
     };
 
@@ -85,7 +93,7 @@ export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        
+
         {/* Header */}
         <div className="p-6 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -93,8 +101,8 @@ export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({
               <Plus className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-black text-slate-900">הוספת פריט ציוד חדש לקטלוג</h2>
-              <p className="text-xs text-slate-500">הזנת פרטי הציוד, שיוך לארגון ולמחסן, תמונה ותפיסת מסגרת</p>
+              <h2 className="text-base font-black text-slate-900">הוספת פריט (מק"ט) חדש לקטלוג</h2>
+              <p className="text-xs text-slate-500">הזנת פרטי הפריט, שיוך לארגון, מחסן ודגם קיים</p>
             </div>
           </div>
 
@@ -108,7 +116,7 @@ export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4 text-xs text-right">
-          
+
           {/* Organization & Warehouse Selection */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 bg-teal-50/50 border border-teal-100 rounded-2xl">
             <div>
@@ -118,6 +126,7 @@ export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({
                 onChange={(e) => {
                   const newOrg = e.target.value;
                   setSelectedOrgId(newOrg);
+                  setModelId('');
                   const matchingWh = allWarehouses.find(w => w.organizationId === newOrg);
                   if (matchingWh) setWarehouseId(matchingWh.id);
                 }}
@@ -154,6 +163,40 @@ export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({
             </div>
           </div>
 
+          <div>
+            <label className="block text-slate-700 font-bold mb-1">דגם ("מוצר" &gt; "דגם") *</label>
+            <select
+              required
+              value={modelId}
+              onChange={(e) => setModelId(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 font-bold focus:outline-none focus:border-teal-600"
+            >
+              <option value="">בחר דגם...</option>
+              {orgProducts.map((product) => (
+                <optgroup key={product.id} label={product.name}>
+                  {orgModels.filter((m) => m.productId === product.id).map((m) => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            {orgProducts.length === 0 && (
+              <p className="text-[11px] text-amber-700 mt-1">אין עדיין מוצרים/דגמים לארגון זה — הוסיפו דרך לשונית "מוצרים ודגמים" לפני הוספת מק"ט.</p>
+            )}
+            {selectedModel && (
+              <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-3">
+                <div className="w-12 h-12 rounded-lg bg-white border border-slate-200 overflow-hidden shrink-0">
+                  {selectedModel.imageUrl && (
+                    <img src={selectedModel.imageUrl} alt={selectedModel.name} className="w-full h-full object-cover" />
+                  )}
+                </div>
+                <div className="text-[11px] text-slate-600">
+                  פיקדון: <strong className="text-teal-700">₪{selectedModel.depositAmount}</strong> · עד {selectedModel.maxLoanDays} ימי השאלה
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-slate-700 font-bold mb-1">שם הפריט *</label>
@@ -179,54 +222,15 @@ export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({
             </div>
           </div>
 
-          {/* Photo URL Input & Preview */}
-          <div className="space-y-2">
-            <label className="block text-slate-700 font-bold">כתובת תמונת מוצר (Image URL)</label>
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1">
-                <ImageIcon className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/photo-..."
-                  value={photoUrl}
-                  onChange={(e) => setPhotoUrl(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pr-10 pl-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600 font-mono"
-                />
-              </div>
-              {photoUrl && (
-                <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0">
-                  <img src={photoUrl} alt="Preview" className="w-full h-full object-cover" />
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-slate-700 font-bold mb-1">קטגוריה</label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as EquipmentCategory)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
-              >
-                <option value="mobility">ניידות וכיסאות גלגלים</option>
-                <option value="medical">מכשור נשימתי ורפואי</option>
-                <option value="comfort">שהייה ולינת מלווים</option>
-                <option value="sabbath">ערכות שבת ומועדים</option>
-                <option value="hygiene">רחצה, שיקום ויולדות</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-slate-700 font-bold mb-1">מיקום מדויק במוקד (מדף / תא לוקר)</label>
-              <input
-                type="text"
-                placeholder="למשל: מדף א׳ עמדה 02"
-                value={depotLocation}
-                onChange={(e) => setDepotLocation(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
-              />
-            </div>
+          <div>
+            <label className="block text-slate-700 font-bold mb-1">מיקום מדויק במוקד (מדף / תא לוקר)</label>
+            <input
+              type="text"
+              placeholder="למשל: מדף א׳ עמדה 02"
+              value={depotLocation}
+              onChange={(e) => setDepotLocation(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-teal-600"
+            />
           </div>
 
           <div>
@@ -251,61 +255,15 @@ export const AddEquipmentModal: React.FC<AddEquipmentModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-3 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
-            <div>
-              <label className="block text-slate-700 font-bold mb-1">כמות מלאי התחלתית</label>
-              <input
-                type="number"
-                min={1}
-                value={stockTotal}
-                onChange={(e) => setStockTotal(Number(e.target.value))}
-                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:outline-none focus:border-teal-600"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-700 font-bold mb-1">תפיסת מסגרת ביטחון (₪)</label>
-              <input
-                type="number"
-                min={0}
-                value={depositAmount}
-                onChange={(e) => setDepositAmount(Number(e.target.value))}
-                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-teal-700 font-bold focus:outline-none focus:border-teal-600"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-700 font-bold mb-1">ימי השאלה מרביים</label>
-              <input
-                type="number"
-                min={1}
-                value={maxLoanDays}
-                onChange={(e) => setMaxLoanDays(Number(e.target.value))}
-                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:outline-none focus:border-teal-600"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-6 pt-2">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={isUrgentSabbath}
-                onChange={(e) => setIsUrgentSabbath(e.target.checked)}
-                className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300"
-              />
-              <span className="font-bold text-slate-800">מתאים לערכות שבת דחופות</span>
-            </label>
-
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={featured}
-                onChange={(e) => setFeatured(e.target.checked)}
-                className="w-4 h-4 rounded text-teal-600 focus:ring-teal-500 border-slate-300"
-              />
-              <span className="font-bold text-slate-800">הצג פריט מומלץ בעמוד הראשי</span>
-            </label>
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+            <label className="block text-slate-700 font-bold mb-1">כמות מלאי התחלתית</label>
+            <input
+              type="number"
+              min={1}
+              value={stockTotal}
+              onChange={(e) => setStockTotal(Number(e.target.value))}
+              className="w-full sm:w-40 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 font-bold focus:outline-none focus:border-teal-600"
+            />
           </div>
 
           {/* Footer Actions */}
