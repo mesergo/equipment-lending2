@@ -50,3 +50,37 @@
   מיושם ב-canAccessOrg (שרק בודק גבול ארגון, לא הרשאת כתיבה לפי role). כשבונים
   את ה-makeCrud הגנרי ב-US-104/105, צריך שכבת בדיקה נוספת שדוחה coordinator
   מ-POST/PATCH/DELETE על ישויות קטלוג, לא רק על ordersRoutes/loans.
+
+## Iteration 2 (בנייה מחדש) — US-103, US-104, US-105, US-106
+- מה נעשה: server/catalogRoutes.ts נכתב מאפס - Organizations (super_admin-only
+  write, +GET by-token ציבורי ל-US-114), ואז makeCrud גנרי ל-
+  Branches/Warehouses/Categories/Models/Products, ואז Customers עם טיפול
+  מיוחד (lookup ציבורי + coordinator מורשה לכתוב, בניגוד לשאר).
+  canWriteCatalog() ב-catalogRoutes.ts (לא ב-auth.ts) קובע ש-coordinator לא
+  יכול POST/PATCH/DELETE על ישויות קטלוג - זו הכרעה סבירה לפי התיאור
+  "תפקיד תפעולי" אבל **לא אומתה מול הממשק החי** (לא היה לי משתמש coordinator
+  אמיתי ב-lendingCRM לבדוק) - אם המשתמש יתקל בפער מול ההרשאות האמיתיות, זה
+  המקום לתקן.
+- ממצא חשוב (מתועד גם ב-PRD ליד US-103): POST /organizations מתעלם מ-id
+  שנשלח בבקשה ותמיד מייצר UUID אקראי - עקבי עם makeCrud הגנרי אבל אומר
+  שאי אפשר לזרוע ארגון עם id צפוי ("org-demo") דרך ה-API הציבורי. גיליתי
+  את זה בפועל: יצרתי ארגון עם id="org-demo" בבקשה, קיבל בחזרה
+  id="org-3c173d5f-..." אקראי. משתמשי הדוגמה שכבר נזרעו (manager@example.com
+  וכו') מצביעים ל-organizationId='org-demo' כמחרוזת קבועה - זה יעבוד רק
+  כשארגון-הדוגמה האמיתי ייווצר עם בדיוק אותו id, דרך סקריפט seed שכותב
+  ישירות ל-Mongo (לא דרך ה-API) - זה בדיוק מה ש-US-115 אמור לעשות. עד אז,
+  כל נתוני הבדיקה שיצרתי (org/branch/wh/category/model/product/customer)
+  נמחקו בסוף המחזור הזה כדי לא להשאיר דאטה "יתומה" עם organizationId
+  שלא מצביע לארגון אמיתי.
+- Validation מלאה מול Atlas: כל התרחישים הבאים נבדקו בפועל (לא רק typecheck) -
+  super_admin יוצר ארגון; org_manager נדחה מיצירת ארגון; lookup-by-token
+  עובד; manager יוצר branch/warehouse/category/model/product (product קיבל
+  loanStatus=not_loaned כברירת מחדל); coordinator נדחה מיצירת branch;
+  coordinator כן הצליח ליצור customer; lookup לפי טלפון מצא את הלקוח; manager
+  רואה את הלקוח ב-GET /customers. כל נתוני הבדיקה נוקו מה-DB בסוף.
+- Learning for next cycle (US-107, Loans - הכי קריטי): כשבונים את ה-seed
+  לארגון דוגמה (US-115) - לזכור ליצור אותו *לפני* שבודקים Loans בפועל, כי
+  Loan מקשר Customer+Product שצריכים להשתייך לאותו organizationId אמיתי,
+  לא סתם מחרוזת. כדאי לשקול לבנות חלק מ-US-115 (זריעת ארגון דוגמה בסיסי)
+  *לפני* US-107, לא אחריו כמו שה-PRD מסודר כרגע - נחליט בזמן אמת לפי מה
+  שיהיה הכי פשוט לבדוק.

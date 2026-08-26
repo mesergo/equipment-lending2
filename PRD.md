@@ -105,32 +105,51 @@ Organization (ארגון)
 
 #### US-103: API ל-Organizations
 **Acceptance Criteria:**
-- [ ] `createMongoStore<Organization>` + ראוטים: GET ציבורי (לצורך דף קטלוג
+- [x] `createMongoStore<Organization>` + ראוטים: GET ציבורי (לצורך דף קטלוג
       לפי token), POST/PATCH/DELETE ל-super_admin בלבד (ארגונים לא נוצרים
-      ע"י org_manager)
-- [ ] Typecheck passes; CRUD נבדק בפועל מול Atlas
+      ע"י org_manager) — 2026-08-26. גם `GET /organizations/by-token/:token`
+      ציבורי (יידרש ע"י US-114, דף הקטלוג הציבורי)
+- [x] Typecheck passes; CRUD נבדק בפועל מול Atlas — 2026-08-26 (יצירה כ-
+      super_admin הצליחה; ניסיון יצירה כ-org_manager נדחה; lookup-by-token
+      עבד). **ממצא חשוב לזכור ל-US-115:** ה-route תמיד מייצר id חדש
+      (`org-${randomUUID()}`) ומתעלם מ-id שנשלח בגוף הבקשה — עקבי עם שאר
+      ה-CRUD הגנרי, אבל אומר שזריעת ארגון-דוגמה עם id קבוע ("org-demo", כדי
+      שיתאים ל-organizationId שכבר בחשבונות הזרועים) *לא* יכולה לעבור דרך ה-API
+      הציבורי — חייבת סקריפט seed ייעודי שכותב ישירות ל-Mongo (US-115)
 
 #### US-104: API ל-Branches, Warehouses, Categories, Models (קטלוג)
 **Description:** ארבע ישויות עם אותו pattern בדיוק (org-scoped CRUD) — story
 אחד כי הן זהות מבנית לחלוטין, ריבוי stories פה רק ייצור חזרתיות.
 
 **Acceptance Criteria:**
-- [ ] 4 stores + ראוטים, כל אחד עם GET ציבורי + CRUD מוגן (`canAccessOrg`)
-- [ ] Typecheck passes; CRUD נבדק בפועל על כל 4 הישויות מול Atlas
+- [x] 4 stores + ראוטים, כל אחד עם GET ציבורי + CRUD מוגן (`canAccessOrg`) —
+      2026-08-26. הוספתי גם `canWriteCatalog`: **coordinator חסום מ-CRUD על
+      כל 4 הישויות** (רק super_admin/org_manager) — זו ההחלטה שסימנתי כפתוחה
+      ב-US-102, ראו progress.txt לנימוק
+- [x] Typecheck passes; CRUD נבדק בפועל על כל 4 הישויות מול Atlas — 2026-08-26
+      (POST כ-manager הצליח על כל ה-4; POST כ-coordinator נדחה כראוי על branch)
 
 #### US-105: API ל-Products (SKU) — כולל `loanStatus`
 **Description:** כמו US-104 אך עם שדה `loanStatus` שמתעדכן אוטומטית ע"י
 מחזור ה-Loan (לא ניתן לעריכה ידנית חופשית מה-CRUD הגנרי — ייאכף ב-US-107).
 
 **Acceptance Criteria:**
-- [ ] store + ראוטים ל-Products; `loanStatus` ברירת מחדל `not_loaned` ביצירה
-- [ ] Typecheck passes; CRUD בסיסי נבדק מול Atlas
+- [x] store + ראוטים ל-Products; `loanStatus` ברירת מחדל `not_loaned` ביצירה
+      — 2026-08-26 (`extraDefaults` ב-makeCrud: `{status:'active',
+      loanStatus:'not_loaned'}`, נדרס ע"י body רק אם נשלח מפורשות)
+- [x] Typecheck passes; CRUD בסיסי נבדק מול Atlas — 2026-08-26 (מוצר שנוצר קיבל
+      loanStatus=not_loaned כברירת מחדל, כמצופה)
 
 #### US-106: API ל-Customers
 **Acceptance Criteria:**
-- [ ] store + ראוטים org-scoped, כולל `GET /customers/lookup?phone=` ציבורי
-      (כמו במערכת החיה — מסך בקשת השאלה מזהה לקוח חוזר לפי טלפון)
-- [ ] Typecheck passes; CRUD + lookup נבדקים מול Atlas
+- [x] store + ראוטים org-scoped, כולל `GET /customers/lookup?phone=` ציבורי
+      (כמו במערכת החיה — מסך בקשת השאלה מזהה לקוח חוזר לפי טלפון) — 2026-08-26.
+      **החלטת הרשאות:** coordinator כן יכול ליצור/לערוך Customer (בניגוד ליתר
+      ישויות הקטלוג) — סביר שסדרן צריך לרשום לקוחות חדשים כשהוא מטפל בבקשת
+      השאלה בפועל; זו החלטת שיפוט, לא נצפתה במפורש בסריקת lendingCRM
+- [x] Typecheck passes; CRUD + lookup נבדקים מול Atlas — 2026-08-26 (customer
+      נוצר ע"י coordinator; lookup לפי טלפון מצא אותו; manager רואה אותו
+      ב-GET /customers)
 
 ### שלב ג' — Loan (הליבה העסקית, תלוי בשלב ב')
 
