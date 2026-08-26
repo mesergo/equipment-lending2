@@ -26,3 +26,27 @@
   .env.example נשארו כמו שהיו - תשתית גנרית לא תלוית-דומיין, לא נגעתי בהם.
 - .vscode/sftp.json (סיסמת SFTP לפרודקשן) עדיין קיים ומחוץ ל-git (gitignored)
   - עדיין לא הוחלף ע"י המשתמש, שווה תזכורת עתידית.
+
+## Iteration 1 (בנייה מחדש) — US-101 + US-102
+- US-101: src/types/index.ts נכתב מאפס - 11 ישויות (Organization, Branch,
+  Warehouse, Category, Model, Product, Customer, Loan, Payment, ActionLog,
+  StoredUser) בדיוק לפי §2 ב-PRD. שים לב: Product.name כולל את מספר הפריט
+  בתוכו (כמו "...מס 309" שנצפה בממשק) - לא שדה נפרד.
+- US-102: server/db.ts, server/genericStore.ts, server/auth.ts, server/store.ts,
+  server/seed-users.ts, server/index.ts (מינימלי - רק auth כרגע) נכתבו מאפס.
+  שינוי מהותי מהגרסה הקודמת: **login לפי email, לא username** - כי מסך
+  ההתחברות ב-lendingCRM מציג "כתובת דואר אלקטרוני". StoredUser.email הוא
+  ה-identifier, עם unique index case-insensitive (collation strength 2).
+  AuthTokenPayload.role כולל 'coordinator'. הוספתי גם canAccessOrg כפונקציית
+  עזר משותפת ב-auth.ts (super_admin=הכל, אחרת organizationId חייב להתאים) -
+  ישמש את כל ראוטי ה-CRUD הבאים כדי לא לשכפל את הלוגיקה.
+- genericStore.ts ו-db.ts כמעט זהים ל-infra הקודם (לפני המחיקה) - זה קוד
+  תשתית גנרי, לא תלוי-דומיין, סביר שיישאר יציב מכאן והלאה.
+- Validation מלאה: npm run seed:users יצר 3 חשבונות; הרצתי dev:server;
+  login+/. me נבדקו לשלושת התפקידים (super_admin/org_manager/coordinator) עם
+  PowerShell; וידאתי organizationId נכון לכל role; סיסמה שגויה נדחתה.
+- Learning for next cycle (US-103, Organizations API): coordinator לא אמור
+  להיות מסוגל ליצור/לערוך ישויות קטלוג (רק לקרוא ולעדכן השאלות) - זה עוד לא
+  מיושם ב-canAccessOrg (שרק בודק גבול ארגון, לא הרשאת כתיבה לפי role). כשבונים
+  את ה-makeCrud הגנרי ב-US-104/105, צריך שכבת בדיקה נוספת שדוחה coordinator
+  מ-POST/PATCH/DELETE על ישויות קטלוג, לא רק על ordersRoutes/loans.

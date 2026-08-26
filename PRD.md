@@ -92,9 +92,14 @@ Organization (ארגון)
 וגם coordinator לארגון דוגמה אחד).
 
 **Acceptance Criteria:**
-- [ ] `AuthTokenPayload.role` הוא `'super_admin' | 'org_manager' | 'coordinator'`
-- [ ] `npm run seed:users` יוצר לפחות: super_admin, org_manager, coordinator
-- [ ] Typecheck passes; login+/me נבדק בפועל מול Atlas לכל שלושת התפקידים
+- [x] `AuthTokenPayload.role` הוא `'super_admin' | 'org_manager' | 'coordinator'`
+      — 2026-08-26
+- [x] `npm run seed:users` יוצר לפחות: super_admin, org_manager, coordinator
+      — 2026-08-26
+- [x] Typecheck passes; login+/me נבדק בפועל מול Atlas לכל שלושת התפקידים —
+      2026-08-26 (curl/PowerShell: כל שלושת החשבונות מתחברים, /me מאשר, סיסמה
+      שגויה נדחית). הערה: login לפי **email** (לא username) — תואם למסך
+      ההתחברות של lendingCRM ("כתובת דואר אלקטרוני").
 
 ### שלב ב' — API לקטלוג (תלוי ב-US-101/102)
 
