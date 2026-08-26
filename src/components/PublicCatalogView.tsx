@@ -1,27 +1,51 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Package, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import {
+  Package,
+  BedDouble,
+  Moon,
+  Armchair,
+  Accessibility,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  CheckCircle2,
+  Star,
+  ShieldCheck,
+} from 'lucide-react';
 import type { Organization, Product, Model, Loan } from '../types';
 
 // Public, no-login page addressed by the organization's token (#catalog/:token). Visual
 // design matches the AI Studio "שבת אחים" reference captured in PRD.md US-114 as closely as
-// an independent implementation reasonably can: teal logo badge, segmented step indicator,
-// bold heading with teal accent underline, white rounded cards with a circular selector and
-// an icon tile. No code or image assets were copied from that reference — icons here are
-// lucide-react (already a project dependency), not the reference's custom illustrations.
+// an independent implementation reasonably can. No code or image assets were copied from
+// that reference — icons here are lucide-react (already a project dependency), chosen per
+// product name to approximate the reference's illustrations rather than one generic icon for
+// everything; terms/policy copy below is written independently, not copied from the reference.
 //
-// Two real steps: pick products, then submit contact details — which actually creates the
-// Loan(s) via POST /api/public/loan-requests (server/loansRoutes.ts). Originally this page
-// only covered product selection with a non-functional "continue" button; per user feedback
-// that dead button was replaced with a working submission flow.
+// Full flow, matching the reference's step count (its progress bar had 6 segments, several of
+// which turned out to be: product selection → contact details → terms confirmation → payment
+// → send). Only the first two steps existed before this pass — added terms and payment after
+// user feedback that the page was missing steps. The payment step is visual only: card fields
+// are never sent to the server (no real clearing-company integration yet, see PRD.md Non-
+// Goals) — it exists so the flow isn't missing a step, not to actually process a card.
 
 const TEAL = '#0d9488'; // tailwind teal-600, matches the reference's accent color closely
+
+function pickIcon(name: string) {
+  if (/מיטה|מיטת/.test(name)) return BedDouble;
+  if (/מזרון|מזרן/.test(name)) return Moon;
+  if (/גלגלים/.test(name)) return Accessibility;
+  if (/כיסא/.test(name)) return Armchair;
+  return Package;
+}
 
 interface CatalogData {
   organization: Organization;
   products: Array<Product & { model?: Model }>;
 }
 
-type Step = 'select' | 'details' | 'success';
+type Step = 'select' | 'details' | 'terms' | 'payment' | 'success';
+const STEPS = 6;
+const STEP_INDEX: Record<Step, number> = { select: 0, details: 1, terms: 2, payment: 3, success: 4 };
 
 export default function PublicCatalogView({ token }: { token: string }) {
   const [data, setData] = useState<CatalogData | null>(null);
@@ -33,6 +57,7 @@ export default function PublicCatalogView({ token }: { token: string }) {
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
   const [patientName, setPatientName] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmedCount, setConfirmedCount] = useState(0);
@@ -120,8 +145,7 @@ export default function PublicCatalogView({ token }: { token: string }) {
 
   const { organization, products } = data;
   const selectedProducts = products.filter((p) => selected.has(p.id));
-  const STEPS = 6;
-  const STEP_INDEX: Record<Step, number> = { select: 0, details: 1, success: 2 };
+  const totalDeposit = selectedProducts.reduce((sum, p) => sum + (p.model?.price ?? 0), 0);
   // DOM-first child renders on the right under RTL, matching the reference's active segment
   // sitting at the right (start-of-reading) side of the bar — active segment advances left as
   // the customer moves through steps.
@@ -170,23 +194,32 @@ export default function PublicCatalogView({ token }: { token: string }) {
               <div className="space-y-4">
                 {products.map((p) => {
                   const isSelected = selected.has(p.id);
+                  const name = p.model?.name ?? p.name;
+                  const Icon = pickIcon(name);
+                  const isPremium = /פרימיום/.test(name);
                   return (
                     <label
                       key={p.id}
-                      className="flex items-center gap-4 bg-white rounded-2xl shadow-sm p-5 cursor-pointer border border-gray-100"
+                      className="flex items-center gap-4 bg-white rounded-2xl shadow-sm p-5 cursor-pointer border-2 transition-colors"
+                      style={{ borderColor: isSelected ? TEAL : '#f3f4f6' }}
                     >
                       {/* DOM order [image, text, selector] renders image on the right and the
                           selector on the left under RTL, matching the reference layout. */}
                       {p.model?.imageUrl ? (
                         <img src={p.model.imageUrl} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" />
                       ) : (
-                        <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
-                          <Package className="w-7 h-7 text-gray-400" strokeWidth={1.5} />
+                        <div className="relative w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
+                          <Icon className="w-7 h-7 text-gray-400" strokeWidth={1.5} />
+                          {isPremium && (
+                            <span className="absolute -top-1.5 -end-1.5 w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center">
+                              <Star className="w-3 h-3 text-white" fill="white" strokeWidth={0} />
+                            </span>
+                          )}
                         </div>
                       )}
 
                       <div className="flex-1 text-right">
-                        <p className="font-bold text-gray-900">{p.model?.name ?? p.name}</p>
+                        <p className="font-bold text-gray-900">{name}</p>
                         {p.model?.price !== undefined && (
                           <p className="text-sm font-semibold mt-1" style={{ color: TEAL }}>
                             סכום פיקדון: {p.model.price}₪
@@ -195,10 +228,10 @@ export default function PublicCatalogView({ token }: { token: string }) {
                       </div>
 
                       <span
-                        className="w-6 h-6 rounded-full border-2 shrink-0 flex items-center justify-center transition-colors"
-                        style={{ borderColor: isSelected ? TEAL : '#d1d5db', backgroundColor: isSelected ? TEAL : 'transparent' }}
+                        className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center transition-colors"
+                        style={{ backgroundColor: isSelected ? TEAL : '#e5e7eb' }}
                       >
-                        {isSelected && <span className="w-2.5 h-2.5 rounded-full bg-white" />}
+                        {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
                       </span>
                       <input type="checkbox" checked={isSelected} onChange={() => toggle(p.id)} className="sr-only" />
                     </label>
@@ -237,7 +270,7 @@ export default function PublicCatalogView({ token }: { token: string }) {
               </ul>
             </div>
 
-            <form onSubmit={submitRequest} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">שם פרטי</label>
@@ -279,30 +312,145 @@ export default function PublicCatalogView({ token }: { token: string }) {
                   className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
+            </div>
 
-              {submitError && <p className="text-red-600 text-sm">{submitError}</p>}
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-white transition-colors disabled:opacity-50"
-                  style={{ backgroundColor: TEAL }}
-                >
-                  <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
-                  {submitting ? 'שולח...' : 'שלח בקשה'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStep('select')}
-                  className="flex items-center justify-center gap-2 rounded-2xl py-4 px-5 font-semibold text-gray-600 border border-gray-200"
-                >
-                  <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
-                  חזרה
-                </button>
-              </div>
-            </form>
+            <div className="flex gap-3 mt-8">
+              <button
+                type="button"
+                disabled={!firstName || !lastName || !phone}
+                onClick={() => setStep('terms')}
+                className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-white transition-colors disabled:cursor-not-allowed"
+                style={{ backgroundColor: firstName && lastName && phone ? TEAL : '#d1d5db' }}
+              >
+                <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
+                המשך לשלב הבא
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep('select')}
+                className="flex items-center justify-center gap-2 rounded-2xl py-4 px-5 font-semibold text-gray-600 border border-gray-200 bg-white"
+              >
+                <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
+                חזרה
+              </button>
+            </div>
           </>
+        )}
+
+        {step === 'terms' && (
+          <>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">תנאי השימוש וההשאלה</h1>
+            <p className="text-gray-400 mb-3">נא לקרוא ולאשר לפני המשך</p>
+            <div className="h-1 w-10 rounded-full mb-8" style={{ backgroundColor: TEAL }} />
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center gap-2 mb-4" style={{ color: TEAL }}>
+                <ShieldCheck className="w-5 h-5" strokeWidth={2} />
+                <p className="font-semibold">הציוד שברשותכם ניתן לכם בהשאלה על ידי {organization.name}</p>
+              </div>
+              <ul className="text-gray-600 text-sm space-y-2 list-disc pr-5">
+                <li>הציוד מיועד לשימוש האדם עבורו הוזמן בלבד.</li>
+                <li>יש לשמור על ניקיון הציוד ותקינותו במהלך תקופת ההשאלה.</li>
+                <li>בתום השימוש, יש להחזיר את הציוד למחסן או לתאם איסוף.</li>
+                <li>סכום הפיקדון יוחזר במלואו לאחר החזרת הציוד במצב תקין.</li>
+              </ul>
+
+              <label className="flex items-center gap-3 mt-6 pt-4 border-t border-gray-100 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  className="w-5 h-5 accent-teal-600"
+                />
+                <span className="text-sm font-medium text-gray-800">קראתי ואני מאשר/ת את תנאי השימוש וההשאלה</span>
+              </label>
+            </div>
+
+            <div className="flex gap-3 mt-8">
+              <button
+                type="button"
+                disabled={!termsAccepted}
+                onClick={() => setStep('payment')}
+                className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-white transition-colors disabled:cursor-not-allowed"
+                style={{ backgroundColor: termsAccepted ? TEAL : '#d1d5db' }}
+              >
+                <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
+                המשך לשלב הבא
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep('details')}
+                className="flex items-center justify-center gap-2 rounded-2xl py-4 px-5 font-semibold text-gray-600 border border-gray-200 bg-white"
+              >
+                <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
+                חזרה
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'payment' && (
+          <form onSubmit={submitRequest}>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">פרטי פיקדון</h1>
+            <p className="text-gray-400 mb-3">סה"כ פיקדון לשמירה: {totalDeposit}₪</p>
+            <div className="h-1 w-10 rounded-full mb-8" style={{ backgroundColor: TEAL }} />
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">מספר כרטיס אשראי</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="0000 0000 0000 0000"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">תוקף</label>
+                  <input
+                    type="text"
+                    placeholder="MM/YY"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">CVV</label>
+                  <input
+                    type="text"
+                    placeholder="123"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  />
+                </div>
+              </div>
+              <p className="flex items-center gap-1.5 text-xs text-gray-400 pt-2 border-t border-gray-100">
+                <ShieldCheck className="w-3.5 h-3.5" strokeWidth={2} />
+                שלב זה עדיין בהדגמה בלבד — פרטי האשראי אינם נשמרים או מועברים בשלב זה
+              </p>
+            </div>
+
+            {submitError && <p className="text-red-600 text-sm mt-3">{submitError}</p>}
+
+            <div className="flex gap-3 mt-8">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-white transition-colors disabled:opacity-50"
+                style={{ backgroundColor: TEAL }}
+              >
+                <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
+                {submitting ? 'שולח...' : 'שלח בקשה להשאלה'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep('terms')}
+                className="flex items-center justify-center gap-2 rounded-2xl py-4 px-5 font-semibold text-gray-600 border border-gray-200 bg-white"
+              >
+                <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
+                חזרה
+              </button>
+            </div>
+          </form>
         )}
 
         {step === 'success' && (
