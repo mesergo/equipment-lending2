@@ -138,3 +138,39 @@
   כדי לקבל אוטומטית Bearer header + auto-logout על 401. קונפיגורציית השדות
   לכל ישות (organizationId/name/וכו') צריכה למפות בדיוק לטיפוסים ב-
   src/types/index.ts - לא להמציא שדות חדשים.
+
+## Iteration 5 (בנייה מחדש) — US-111 (מסכי CRUD גנריים)
+- מה נעשה: src/components/EntityTable.tsx (טבלה גנרית: רשימה, טופס
+  יצירה/עריכה inline, מחיקה עם confirm()) + src/components/CatalogScreens.tsx
+  (קונפיגורציית שדות ל-7 הישויות: Organizations/Branches/Warehouses/
+  Categories/Models/Products/Customers). useOptions() hook טוען רשימות
+  קשורות (קטגוריות בשביל דגם, דגמים+מחסנים בשביל מוצר) והופך אותן ל-select
+  options.
+- תיקון עקביות: GET /api/organizations החזיר `{organizations:[...]}` בעוד
+  שכל שאר ה-endpoints מחזירים `{items:[...]}` - שיניתי אותו ל-`{items:[...]}`
+  כדי ש-EntityTable הגנרי יעבוד בלי special-case. זה שינוי breaking בתיאוריה
+  אבל בפועל אין עדיין קליינט אחר שצרך את ה-shape הישן (רק נכתב ב-US-103,
+  אף פרונט לא היה קיים עדיין).
+- מכשול טיפוסים: `T extends EntityRow` עם `[key: string]: unknown` נכשל כי
+  הטיפוסים שלנו (Organization וכו') לא מוגדרים עם index signature. תוקן
+  ע"י הרפיית ה-constraint ל-`T extends { id: string }` בלבד - אינדוקס לפי
+  `keyof T` תקין בלי index signature מפורש.
+- Validation מלאה **בדפדפן בפועל** (Browser pane, לא רק typecheck): login
+  כ-manager → מסך קטגוריות → יצירת "מכשור נשימתי" הצליחה ומופיעה ברשימה →
+  עריכה ל"מכשור נשימתי ורפואי" הצליחה ומשתקפת מיידית → מחיקה: confirm()
+  של הדפדפן נדחה אוטומטית ע"י סביבת האוטומציה (ביטול, לא אישור) - הפריט
+  נשאר, שזו ההתנהגות הנכונה לביטול. מסך דגמים: categoryId מוצג כשם קטגוריה
+  ("ניידות ושיקום") לא כ-id גולמי. מסך מוצרים: modelId/warehouseId/loanStatus
+  כולם מוצגים נכון, כולל שהמוצר שהוחזר ב-Iteration 3 מציג "לא הושאל" -
+  מוכיח עקביות המידע בין stories שונים. 0 שגיאות אמיתיות בקונסולה (רק
+  WebSocket HMR error שקשור לסביבת ה-preview, לא לאפליקציה).
+- פער שנתגלה ותועד ב-PRD: super_admin לא יכול ליצור ישויות קטלוג דרך ה-UI
+  הנוכחי כי אין select לבחירת ארגון בטופס (השרת דורש organizationId בגוף
+  הבקשה עבור super_admin, לא כמו org_manager שמקבל אותו אוטומטית). לא תוקן
+  עכשיו - manager/coordinator (המקרה הנפוץ) עובד מצוין, וזה תיעוד שקוף
+  ל"פער ידוע" ולא כשל שקט.
+- Learning for next cycle (US-112, מסך השאלות): זה המסך הכי מורכב שנשאר -
+  לא EntityTable גנרי, צריך: טאבי סטטוס, בחירת customer+product מתוך
+  רשימות (select, לא free text), הצגת ActionLog inline. לזכור ש-POST /loans
+  דורש organizationId רק ל-super_admin (כמו הבעיה שתועדה למעלה) - לבנות את
+  הטופס כך ש-org_manager/coordinator (המקרים הנפוצים) לא נתקלים בבעיה דומה.

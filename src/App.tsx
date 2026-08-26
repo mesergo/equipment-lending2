@@ -3,6 +3,15 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginView from './components/LoginView';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
+import {
+  OrganizationsScreen,
+  BranchesScreen,
+  WarehousesScreen,
+  CategoriesScreen,
+  ModelsScreen,
+  ProductsScreen,
+  CustomersScreen,
+} from './components/CatalogScreens';
 
 function useHashRoute(): string {
   const [hash, setHash] = useState(() => window.location.hash.slice(1) || 'dashboard');
@@ -49,19 +58,19 @@ function RouteContent({ route }: { route: string }) {
     case 'dashboard':
       return <DashboardView />;
     case 'organizations':
-      return <ComingSoon label="ארגונים" />;
+      return <OrganizationsScreen />;
     case 'branches':
-      return <ComingSoon label="סניפים" />;
+      return <BranchesScreen />;
     case 'warehouses':
-      return <ComingSoon label="מחסנים" />;
+      return <WarehousesScreen />;
     case 'categories':
-      return <ComingSoon label="קטגוריות" />;
+      return <CategoriesScreen />;
     case 'models':
-      return <ComingSoon label="דגמים" />;
+      return <ModelsScreen />;
     case 'products':
-      return <ComingSoon label="מוצרים" />;
+      return <ProductsScreen />;
     case 'customers':
-      return <ComingSoon label="לקוחות" />;
+      return <CustomersScreen />;
     case 'loans':
       return <ComingSoon label="השאלות" />;
     case 'payments':

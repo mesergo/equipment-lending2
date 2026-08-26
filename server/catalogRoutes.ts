@@ -31,7 +31,7 @@ export const catalogRouter = Router();
 
 // ---- Organizations: public read (the catalog page needs it by token), super_admin-only write ----
 catalogRouter.get('/organizations', async (_req, res) => {
-  res.json({ organizations: await organizationsStore.readAll() });
+  res.json({ items: await organizationsStore.readAll() });
 });
 
 catalogRouter.get('/organizations/by-token/:token', async (req, res) => {

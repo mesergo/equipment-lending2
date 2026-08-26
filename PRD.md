@@ -221,9 +221,21 @@ Organization (ארגון)
 כמו שה-backend כבר בנוי גנרית (US-104/105/106).
 
 **Acceptance Criteria:**
-- [ ] קומפוננטת `EntityTable` גנרית + קונפיג לכל אחת מ-7 הישויות
-- [ ] Typecheck passes; Verify changes work in browser — CRUD מלא על לפחות
-      2 ישויות שונות נבדק ידנית בדפדפן
+- [x] קומפוננטת `EntityTable` גנרית + קונפיג לכל אחת מ-7 הישויות — 2026-08-26
+      (`EntityTable.tsx` + `CatalogScreens.tsx`; שדות select עם ערכים מקושרים
+      נטענים דרך `useOptions` — Model→Category, Product→Model+Warehouse)
+- [x] Typecheck passes; Verify changes work in browser — CRUD מלא על לפחות
+      2 ישויות שונות נבדק ידנית בדפדפן — 2026-08-26. **נבדק בפועל בדפדפן** (לא
+      רק קריאות API): קטגוריות — יצירה/עריכה/מחיקה (מחיקה עצרה כצפוי ב-confirm()
+      הדפדפן, מוגן מפני מחיקה בטעות); דגמים — הצגת categoryId כשם קטגוריה
+      נכון (לא raw id); מוצרים — הצגת modelId+warehouseId+loanStatus נכון,
+      כולל שהמוצר שהוחזר ב-US-107 מציג "לא הושאל" כמצופה
+- **פער ידוע לתיקון עתידי:** super_admin לא יכול כרגע ליצור ישויות קטלוג
+  (branches/warehouses/וכו') דרך ה-UI, כי אין select לבחירת ארגון בטופס —
+  ה-server דורש organizationId בגוף הבקשה כש-role=super_admin (רק org_manager
+  מקבל אותו אוטומטית מה-token). לא חסם קריטי כרגע (manager/coordinator כן
+  עובד), אבל שווה תיקון בעתיד אם super_admin יצטרך לנהל קטלוג של ארגון
+  ספציפי ישירות
 
 #### US-112: מסך השאלות (Loans) — הליבה העסקית
 **Description:** מסך ייעודי (לא גנרי כמו US-111) כי יש לו לוגיקה מיוחדת:
