@@ -16,6 +16,7 @@ import {
 import LoansScreen from './components/LoansScreen';
 import ActionLogsScreen from './components/ActionLogsScreen';
 import UsersScreen from './components/UsersScreen';
+import PublicCatalogView from './components/PublicCatalogView';
 
 function useHashRoute(): string {
   const [hash, setHash] = useState(() => window.location.hash.slice(1) || 'dashboard');
@@ -85,6 +86,15 @@ function AuthGate() {
 }
 
 export default function App() {
+  const route = useHashRoute();
+
+  // Public route — no auth required, checked before AuthProvider's gate so a customer
+  // never sees the login screen. #catalog/<token>, matching every other route's hash style.
+  if (route.startsWith('catalog/')) {
+    const token = route.slice('catalog/'.length);
+    return <PublicCatalogView token={token} />;
+  }
+
   return (
     <AuthProvider>
       <AuthGate />

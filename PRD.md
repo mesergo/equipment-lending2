@@ -302,9 +302,22 @@ Organization (ארגון)
 מודל הנתונים הישן.
 
 **Acceptance Criteria:**
-- [ ] דף `/catalog/:token` טוען מוצרים זמינים (Product עם loanStatus=
-      not_loaned) לפי הארגון, בעיצוב wizard/כרטיסים כמו הרפרנס
-- [ ] Typecheck passes; Verify changes work in browser בשני ארגונים שונים
+- [x] דף `/catalog/:token` טוען מוצרים זמינים (Product עם loanStatus=
+      not_loaned) לפי הארגון, בעיצוב wizard/כרטיסים כמו הרפרנס — 2026-08-26.
+      `#catalog/:token` (hash-based, כמו כל שאר הראוטים באפליקציה, לא path-
+      based) — נבדק ב-`App.tsx` ברמה הכי גבוהה, *לפני* ה-AuthProvider, כדי
+      שלקוח פרטי לעולם לא יראה מסך login. תצוגה ברמת Product (לא Model
+      מקובץ) לפי הניסוח המילולי של הקריטריון; שם+מחיר/תמונה מגיעים מה-Model
+      המקושר
+- [x] Typecheck passes; Verify changes work in browser בשני ארגונים שונים —
+      2026-08-26. הורחב `server/seed-demo.ts` ליצור **שני** ארגוני דוגמה
+      (org-demo/token=demo, org-demo-2/token=demo2) בדיוק כדי לאפשר את
+      הבדיקה הזו — לא היה קיים ארגון שני קודם. **נבדק בפועל בדפדפן**:
+      `#catalog/demo` מציג "ארגון דוגמה" + 2 מוצרים זמינים (השלישי, שמושאל
+      מ-US-112, נעדר כצפוי); `#catalog/demo2` מציג "ארגון דוגמה שני" +
+      "מיטת מלווה מתקפלת" ב-80₪ (נתונים שונים לגמרי, מוכיח שהמיתוג באמת
+      דינמי ולא hardcoded); `#catalog/token-לא-קיים` מציג "ארגון לא נמצא"
+      בלי קריסה. 0 שגיאות קונסולה בכל המקרים
 
 #### US-115: סקריפט זריעת דאטה לדוגמה (seed) לכל הישויות
 **Description:** כרגע רק users נזרעים. צריך seed גם לארגון דוגמה אחד מלא —
