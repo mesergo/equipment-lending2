@@ -111,3 +111,30 @@
   קריטי לבדיקת ה-loop העסקי המרכזי (Loans כבר עובד בלי Payment מקושר -
   paymentId הוא optional). אפשר לבנות Payments מהר כ-CRUD גנרי סטנדרטי בלי
   לוגיקה מיוחדת, ואז לעבור ל-frontend - שם הערך הכי גדול למשתמש מעכשיו.
+
+## Iteration 4 (בנייה מחדש) — US-108 (Payments), US-110 (Frontend shell)
+- US-108: server/paymentsRoutes.ts, CRUD רגיל org-scoped, נבדק מול Atlas
+  (יצירה+PATCH+GET). כל ה-backend API עכשיו שלם (US-103 עד US-109).
+- US-110: index.html, src/index.css (Tailwind v4 import), src/main.tsx,
+  src/context/AuthContext.tsx (login/logout/me, טוקן ב-localStorage,
+  useAuthedFetch עוטף fetch עם Bearer header + auto-logout על 401),
+  src/components/LoginView.tsx, src/components/Sidebar.tsx (תפריט זהה
+  לסדר בממשק החי, "ארגונים" מוגבל ל-super_admin דרך NAV_ITEMS[].roles),
+  src/components/DashboardView.tsx (מינימלי - הודעת ברוכים הבאים בלבד,
+  לא stats cards כמו בממשק החי - לא story נפרד ב-PRD, ראוי לחזור אליו),
+  src/App.tsx (hash routing פשוט, ComingSoon placeholder לכל מסך שעוד לא
+  נבנה).
+- שגיאת typecheck שנתקלתי בה: `React.FormEvent` נכשל כי לא היה import של
+  React עצמו (רק hooks ספציפיים) - תוקן ל-`import { type FormEvent } from
+  'react'` ושימוש ב-`FormEvent` ישירות, לא `React.FormEvent`. לזכור את זה
+  בקומפוננטות עתידיות עם event handlers מוקלדים.
+- Validation מלאה בדפדפן (לא רק typecheck!) - הרצתי `npm run dev` (client+
+  server ביחד), פתחתי ב-Browser pane, ובדקתי בפועל: login כ-manager מציג
+  dashboard עם שם נכון; sidebar לא מציג "ארגונים" ל-manager; קליק על
+  "השאלות" מנווט נכון (hash routing עובד); logout מחזיר ל-login; login
+  מחדש כ-admin *כן* מציג "ארגונים" בסיידבר. 0 שגיאות בקונסולה בכל שלב.
+- Learning for next cycle (US-111, מסכי CRUD גנריים): עכשיו יש AuthContext
+  עם useAuthedFetch מוכן - כל מסך CRUD חדש צריך להשתמש בו במקום fetch גולמי,
+  כדי לקבל אוטומטית Bearer header + auto-logout על 401. קונפיגורציית השדות
+  לכל ישות (organizationId/name/וכו') צריכה למפות בדיוק לטיפוסים ב-
+  src/types/index.ts - לא להמציא שדות חדשים.

@@ -206,9 +206,13 @@ Organization (ארגון)
 קטגוריות, דגמים, מוצרים, לקוחות, השאלות, תשלומים, לוגי פעולות, משתמשים).
 
 **Acceptance Criteria:**
-- [ ] Login עובד, טוקן נשמר, ניווט מוצג לפי role (coordinator/org_manager לא
-      רואים "ארגונים")
-- [ ] Typecheck passes; Verify changes work in browser
+- [x] Login עובד, טוקן נשמר, ניווט מוצג לפי role (coordinator/org_manager לא
+      רואים "ארגונים") — 2026-08-26
+- [x] Typecheck passes; Verify changes work in browser — 2026-08-26 (נבדק
+      בפועל ב-Browser pane: login כ-manager → dashboard מציג שם נכון → sidebar
+      ללא "ארגונים" → ניווט ל"השאלות" עובד (hash routing) → logout מחזיר
+      למסך login → login כ-admin → sidebar כן מציג "ארגונים". 0 שגיאות קונסולה
+      בכל השלבים)
 
 #### US-111: מסכי CRUD גנריים לטבלאות (ארגונים/סניפים/מחסנים/קטגוריות/דגמים/
 מוצרים/לקוחות)
