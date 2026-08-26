@@ -80,6 +80,31 @@
   שמסמנים story שנוגע ב-DB כ-"עובד" - typecheck פסי לא אומר שה-collation/
   ה-connection string נכונים בפועל.
 
+## Iteration 4 — US-004 (מיגרציית orders ל-Mongo)
+- מה נעשה: server/ordersStore.ts נכתב מחדש לגמרי מול collection 'orders' -
+  unique index על id, seed חד-פעמי מ-INITIAL_ORDERS אם ריק. שיפור מעבר לדרישה
+  המקורית: createOrder/updateOrder עברו מ-read-all-then-write-all (כמו הקובץ
+  הישן) ל-insertOne/findOneAndUpdate אטומיים - זה סוגר את הפער של "אין locking
+  בין קריאה-לכתיבה" שצוין ב-PRD §6 לגבי כל שכבת ה-JSON-store הישנה, לפחות
+  עבור orders. readOrders ממוין לפי createdAt desc כדי לשמר את סמנטיקת
+  "החדש ביותר קודם" שהיתה קיימת דרך prepend בקובץ הישן.
+  עודכנו server/ordersRoutes.ts (כל handler הפך async) ו-server/reminders.ts
+  (await על readOrders/updateOrder).
+- Validation מלאה: הרצתי dev:server, התחברתי, GET /orders החזיר את 3 ההזמנות
+  הזרועות; POST /orders יצר הזמנת בדיקה בהצלחה; POST חוזר עם אותו id נדחה עם
+  409 (מוודא שה-unique index+טיפול בשגיאת קוד 11000 עובדים); PATCH עדכן סטטוס
+  בהצלחה. ניקיתי את רשומת הבדיקה מה-DB דרך סקריפט tsx חד-פעמי (_tmp_cleanup.ts,
+  נמחק אחרי הריצה - לא הושאר בפרויקט).
+- Learning: node -e / קבצים זמניים תחת /tmp לא עובדים טוב עם tsx על Windows
+  (בעיית resolution בין נתיבי bash-mounted ל-node_modules של הפרויקט) - אם
+  צריך סקריפט חד-פעמי לבדיקה/ניקוי, לכתוב אותו כקובץ .ts בתוך שורש הפרויקט
+  עצמו (עם Write), להריץ עם npx tsx, ואז למחוק אותו - לא תחת /tmp.
+- Learning for next cycle (US-005, generic catalog store): warehousesStore.find
+  ב-ordersRoutes.ts (resolveOrgId) עדיין סינכרוני בכוונה - הוא ישודרג רק
+  ב-US-005 ביחד עם שאר ה-genericStore. כשמשדרגים אותו, לזכור לעדכן גם את
+  resolveOrgId/canAccessOrder ב-ordersRoutes.ts ל-async (זה קובץ שכבר נגעתי
+  בו במחזור הזה, קל לפספס שהוא צריך עוד עדכון במחזור הבא).
+
 ## גילוי אבטחה — .vscode/sftp.json (2026-08-26)
 - בזמן העברת התיקייה ל-Desktop התגלה קובץ `.vscode/sftp.json` עם סיסמת SFTP
   בטקסט גלוי לשרת פרודקשן (103.95.119.21, rental.message.co.il). נוסף מיידית

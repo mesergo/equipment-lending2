@@ -51,7 +51,7 @@ export interface ReminderSweepResult {
 // default) at most one reminder per order per calendar day.
 export async function runReminderSweep(): Promise<ReminderSweepResult> {
   const today = todayISO();
-  const orders = readOrders();
+  const orders = await readOrders();
   const provider = getWhatsAppProvider();
 
   let sent = 0;
@@ -75,7 +75,7 @@ export async function runReminderSweep(): Promise<ReminderSweepResult> {
         body: buildReminderText(order, daysOverdue),
         context: { orderId: order.id, kind: 'return_reminder' },
       });
-      updateOrder(order.id, {
+      await updateOrder(order.id, {
         lastReminderSentOn: today,
         reminderCount: (order.reminderCount || 0) + 1,
       });

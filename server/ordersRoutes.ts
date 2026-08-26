@@ -23,14 +23,14 @@ function normalizePhone(phone: string): string {
 export const ordersRouter = Router();
 
 // Public: a completed checkout persists its order here (see src/App.tsx's handleOrderComplete).
-ordersRouter.post('/orders', (req, res) => {
+ordersRouter.post('/orders', async (req, res) => {
   const order = req.body as Partial<OrderRecord>;
   if (!order || !order.id || !order.patientPhone || !order.expectedReturnDate) {
     res.status(400).json({ error: 'הזמנה חסרה שדות נדרשים' });
     return;
   }
   try {
-    const created = createOrder(order as OrderRecord);
+    const created = await createOrder(order as OrderRecord);
     res.status(201).json({ order: created });
   } catch (err) {
     res.status(409).json({ error: (err as Error).message });
@@ -40,17 +40,17 @@ ordersRouter.post('/orders', (req, res) => {
 // Protected: admin/org-manager order list, always scoped server-side to the caller's own
 // organization — an org_manager's token can never pull another organization's orders, even
 // if the client is tampered with.
-ordersRouter.get('/orders', requireAuth, (req: AuthedRequest, res: Response) => {
+ordersRouter.get('/orders', requireAuth, async (req: AuthedRequest, res: Response) => {
   const auth = req.auth!;
-  const all = readOrders();
+  const all = await readOrders();
   const visible = auth.role === 'super_admin' ? all : all.filter((o) => resolveOrgId(o) === auth.organizationId);
   res.json({ orders: visible });
 });
 
 // Protected: generic staff update (dispatch/delivery status, hold status, volunteer assignment).
-ordersRouter.patch('/orders/:id', requireAuth, (req: AuthedRequest, res: Response) => {
+ordersRouter.patch('/orders/:id', requireAuth, async (req: AuthedRequest, res: Response) => {
   const auth = req.auth!;
-  const existing = findOrder(req.params.id);
+  const existing = await findOrder(req.params.id);
   if (!existing) {
     res.status(404).json({ error: 'הזמנה לא נמצאה' });
     return;
@@ -72,15 +72,15 @@ ordersRouter.patch('/orders/:id', requireAuth, (req: AuthedRequest, res: Respons
   if (actualReturnDate !== undefined) patch.actualReturnDate = actualReturnDate;
   if (notes !== undefined) patch.notes = notes;
 
-  const updated = updateOrder(existing.id, patch);
+  const updated = await updateOrder(existing.id, patch);
   res.json({ order: updated });
 });
 
 // Public: the customer's own "I already returned this" report. No login — instead it requires
 // the phone number on file for the order, which is enough friction to stop random guessing of
 // order ids without needing a whole customer account/login system.
-ordersRouter.post('/orders/:id/report-return', (req, res) => {
-  const order = findOrder(req.params.id);
+ordersRouter.post('/orders/:id/report-return', async (req, res) => {
+  const order = await findOrder(req.params.id);
   if (!order) {
     res.status(404).json({ error: 'הזמנה לא נמצאה' });
     return;
@@ -98,7 +98,7 @@ ordersRouter.post('/orders/:id/report-return', (req, res) => {
     return;
   }
 
-  const updated = updateOrder(order.id, {
+  const updated = await updateOrder(order.id, {
     orderStatus: 'return_reported',
     returnReportedAt: new Date().toISOString(),
   });
@@ -106,9 +106,9 @@ ordersRouter.post('/orders/:id/report-return', (req, res) => {
 });
 
 // Protected: staff confirms the return after physically inspecting the equipment.
-ordersRouter.post('/orders/:id/confirm-return', requireAuth, (req: AuthedRequest, res: Response) => {
+ordersRouter.post('/orders/:id/confirm-return', requireAuth, async (req: AuthedRequest, res: Response) => {
   const auth = req.auth!;
-  const existing = findOrder(req.params.id);
+  const existing = await findOrder(req.params.id);
   if (!existing) {
     res.status(404).json({ error: 'הזמנה לא נמצאה' });
     return;
@@ -121,7 +121,7 @@ ordersRouter.post('/orders/:id/confirm-return', requireAuth, (req: AuthedRequest
   const outcome = req.body?.outcome === 'needs_sanitizing' ? 'needs_sanitizing' : 'clean';
   const newStatus: OrderStatus = outcome === 'needs_sanitizing' ? 'returned_sanitizing' : 'returned_clean';
 
-  const updated = updateOrder(existing.id, {
+  const updated = await updateOrder(existing.id, {
     orderStatus: newStatus,
     actualReturnDate: new Date().toISOString().slice(0, 10),
     returnConfirmedAt: new Date().toISOString(),

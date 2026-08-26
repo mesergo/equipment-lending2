@@ -1,54 +1,67 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import { getDb } from './db';
 import type { OrderRecord } from '../src/types';
 import { INITIAL_ORDERS } from '../src/data/mockData';
 
-const DATA_DIR = path.resolve(process.cwd(), 'server', 'data');
-const ORDERS_FILE = path.join(DATA_DIR, 'orders.json');
+// MongoDB-backed order storage — the same pattern as server/store.ts for users. Orders used
+// to live only in the browser's React state, which meant a page refresh silently deleted
+// every loan record, and two browsers/devices never saw the same data. Persisting them here is
+// what makes WhatsApp reminders (a server process, not a browser tab) and cross-device admin
+// notifications possible at all.
+//
+// createOrder/updateOrder use atomic Mongo operations (insertOne / findOneAndUpdate) rather
+// than a read-all-then-write-all cycle, so two concurrent requests can't race and clobber each
+// other's changes the way the old JSON-file version could.
 
-// NOTE: this is a small JSON-file store — the same pattern as server/store.ts for users.
-// Orders used to live only in the browser's React state, which meant a page refresh
-// silently deleted every loan record, and two browsers/devices never saw the same data.
-// Moving them here is what makes WhatsApp reminders (a server process, not a browser tab)
-// and cross-device admin notifications possible at all. When you migrate to MongoDB, swap
-// the functions below for an `orders` collection — the routes in server/index.ts and the
-// reminder sweep in server/reminders.ts don't need to change.
+const COLLECTION = 'orders';
 
-function ensureSeeded(): void {
-  if (fs.existsSync(ORDERS_FILE)) return;
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(ORDERS_FILE, JSON.stringify(INITIAL_ORDERS, null, 2), 'utf-8');
-}
+let ready: Promise<unknown> | null = null;
 
-export function readOrders(): OrderRecord[] {
-  ensureSeeded();
-  return JSON.parse(fs.readFileSync(ORDERS_FILE, 'utf-8'));
-}
-
-export function writeOrders(orders: OrderRecord[]): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2), 'utf-8');
-}
-
-export function findOrder(id: string): OrderRecord | undefined {
-  return readOrders().find((o) => o.id === id);
-}
-
-export function createOrder(order: OrderRecord): OrderRecord {
-  const orders = readOrders();
-  if (orders.some((o) => o.id === order.id)) {
-    throw new Error(`Order ${order.id} already exists`);
+async function ordersCollection() {
+  const db = await getDb();
+  const col = db.collection<OrderRecord>(COLLECTION);
+  if (!ready) {
+    ready = col
+      .createIndex({ id: 1 }, { unique: true })
+      .then(() => col.countDocuments())
+      .then((count) => {
+        if (count === 0 && INITIAL_ORDERS.length > 0) return col.insertMany(INITIAL_ORDERS);
+      });
   }
-  writeOrders([order, ...orders]);
+  await ready;
+  return col;
+}
+
+// Newest first, matching the old JSON-file behavior of prepending each new order.
+export async function readOrders(): Promise<OrderRecord[]> {
+  const col = await ordersCollection();
+  return col.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).toArray();
+}
+
+export async function findOrder(id: string): Promise<OrderRecord | undefined> {
+  const col = await ordersCollection();
+  const order = await col.findOne({ id }, { projection: { _id: 0 } });
+  return order ?? undefined;
+}
+
+export async function createOrder(order: OrderRecord): Promise<OrderRecord> {
+  const col = await ordersCollection();
+  try {
+    await col.insertOne({ ...order });
+  } catch (err) {
+    if ((err as { code?: number }).code === 11000) {
+      throw new Error(`Order ${order.id} already exists`);
+    }
+    throw err;
+  }
   return order;
 }
 
-export function updateOrder(id: string, patch: Partial<OrderRecord>): OrderRecord | undefined {
-  const orders = readOrders();
-  const idx = orders.findIndex((o) => o.id === id);
-  if (idx === -1) return undefined;
-  const updated = { ...orders[idx], ...patch };
-  orders[idx] = updated;
-  writeOrders(orders);
-  return updated;
+export async function updateOrder(id: string, patch: Partial<OrderRecord>): Promise<OrderRecord | undefined> {
+  const col = await ordersCollection();
+  const updated = await col.findOneAndUpdate(
+    { id },
+    { $set: patch },
+    { returnDocument: 'after', projection: { _id: 0 } }
+  );
+  return updated ?? undefined;
 }

@@ -73,10 +73,15 @@ progress.txt, Iteration 1), ובכל מקרה Atlas זמין וכבר מחובר
 `INITIAL_ORDERS`.
 
 **Acceptance Criteria:**
-- [ ] `readOrders`/`createOrder`/`findOrder`/`updateOrder` הופכים ל-async מול
-      collection `orders` (unique index על `id`); seed חד-פעמי אם הקולקציה ריקה
-- [ ] `server/ordersRoutes.ts` ו-`server/reminders.ts` מעודכנים ל-`await`
-- [ ] Typecheck passes; יצירת הזמנה מהקטלוג ואישור החזרה עובדים end-to-end מול Mongo
+- [x] `readOrders`/`createOrder`/`findOrder`/`updateOrder` הופכים ל-async מול
+      collection `orders` (unique index על `id`); seed חד-פעמי אם הקולקציה ריקה —
+      2026-08-26 (createOrder/updateOrder גם שודרגו לפעולות אטומיות ב-Mongo
+      במקום read-all/write-all, כדי לסגור את סיכון ה-race condition שצוין ב-§6)
+- [x] `server/ordersRoutes.ts` ו-`server/reminders.ts` מעודכנים ל-`await` — 2026-08-26
+- [x] Typecheck passes; יצירת הזמנה מהקטלוג ואישור החזרה עובדים end-to-end מול Mongo
+      — 2026-08-26 (נבדק בפועל: 3 ההזמנות הזרועות מ-INITIAL_ORDERS נטענות דרך
+      GET /orders; יצירת הזמנה חדשה מצליחה; יצירה כפולה עם אותו id נדחית עם 409;
+      PATCH מעדכן סטטוס בהצלחה; רשומת הבדיקה נוקתה מה-DB בסוף)
 
 #### US-005: מיגרציית `server/genericStore.ts` ל-Mongo (`createMongoStore`)
 **Description:** כמפתח, אני רוצה שה-factory הגנרי (שמשמש products/models/branches/
