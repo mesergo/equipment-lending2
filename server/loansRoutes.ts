@@ -4,8 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { createMongoStore } from './genericStore';
 import { requireAuth, canAccessOrg } from './auth';
 import type { AuthedRequest, AuthTokenPayload } from './auth';
-import { productsStore } from './catalogRoutes';
-import type { Loan, LoanStatus, ActionLog } from '../src/types';
+import { productsStore, organizationsStore, customersStore } from './catalogRoutes';
+import type { Loan, LoanStatus, ActionLog, Customer } from '../src/types';
 
 // Loans are the core transaction lendingCRM is built around: a Loan links a Customer to a
 // Product for a date range. Two things must stay in sync with every Loan create/update,
@@ -130,6 +130,88 @@ loansRouter.patch('/loans/:id', requireAuth, async (req: AuthedRequest, res: Res
   }
 
   res.json({ item: updated });
+});
+
+// Public (no login) endpoint backing the "המשך לשלב הבא" button on the catalog page
+// (PublicCatalogView) — a customer submitting the wizard has no auth token. Resolves the
+// organization by its public token, finds-or-creates the Customer by phone within that org
+// (matches how the live system's bedside request flow identifies returning customers by
+// phone — see server/catalogRoutes.ts's /customers/lookup), then creates one Loan per
+// selected product, applying the exact same Product.loanStatus flip + ActionLog write as the
+// authenticated create path above. Products that became unavailable between page-load and
+// submit (race with another customer, or staff) are silently skipped rather than failing the
+// whole request — the response tells the caller which ones actually went through.
+loansRouter.post('/public/loan-requests', async (req, res) => {
+  const { token, productIds, firstName, lastName, phone, hospitalizedPatientName } = req.body || {};
+
+  if (
+    !token ||
+    !Array.isArray(productIds) ||
+    productIds.length === 0 ||
+    !firstName ||
+    !lastName ||
+    !phone
+  ) {
+    res.status(400).json({ error: 'חסרים שדות נדרשים (מוצרים, שם פרטי, שם משפחה, טלפון)' });
+    return;
+  }
+
+  const organizations = await organizationsStore.readAll();
+  const organization = organizations.find((o) => o.token === token);
+  if (!organization) {
+    res.status(404).json({ error: 'ארגון לא נמצא' });
+    return;
+  }
+
+  const normalizedPhone = String(phone).replace(/\D/g, '');
+  const customers = await customersStore.readAll();
+  let customer = customers.find(
+    (c) => c.organizationId === organization.id && c.mobilePhone.replace(/\D/g, '') === normalizedPhone
+  );
+  if (!customer) {
+    customer = await customersStore.create({
+      id: `cust-${randomUUID()}`,
+      organizationId: organization.id,
+      firstName: String(firstName),
+      lastName: String(lastName),
+      mobilePhone: String(phone),
+    } as Customer);
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const createdLoans: Loan[] = [];
+
+  for (const productId of productIds) {
+    const product = await productsStore.find(String(productId));
+    if (!product || product.organizationId !== organization.id) continue;
+    if (product.loanStatus !== 'not_loaned') continue; // no longer available — skip, don't fail the whole request
+
+    const loan: Loan = {
+      id: `loan-${randomUUID()}`,
+      organizationId: organization.id,
+      status: 'loaned',
+      customerId: customer.id,
+      hospitalizedPatientName: hospitalizedPatientName ? String(hospitalizedPatientName) : undefined,
+      productId: product.id,
+      loanDate: today,
+    };
+    const created = await loansStore.create(loan);
+    await productsStore.update(product.id, { loanStatus: 'loaned' });
+    await logAction(
+      organization.id,
+      `${customer.firstName} ${customer.lastName} (בקשה ציבורית)`,
+      loan.id,
+      `בקשת השאלה ציבורית נוצרה עבור ${product.name}`
+    );
+    createdLoans.push(created);
+  }
+
+  if (createdLoans.length === 0) {
+    res.status(409).json({ error: 'המוצרים שנבחרו כבר אינם זמינים — נא לרענן ולנסות שוב' });
+    return;
+  }
+
+  res.status(201).json({ loans: createdLoans, customer, skipped: productIds.length - createdLoans.length });
 });
 
 // ActionLog is written only internally (above); this is the read-only endpoint for the
