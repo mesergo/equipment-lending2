@@ -174,3 +174,34 @@
   רשימות (select, לא free text), הצגת ActionLog inline. לזכור ש-POST /loans
   דורש organizationId רק ל-super_admin (כמו הבעיה שתועדה למעלה) - לבנות את
   הטופס כך ש-org_manager/coordinator (המקרים הנפוצים) לא נתקלים בבעיה דומה.
+
+## Iteration 6 (בנייה מחדש) — US-112 (מסך השאלות)
+- מה נעשה: src/components/LoansScreen.tsx - מסך ייעודי (לא EntityTable).
+  טאבי סטטוס (הכל/מושאל/חזר/בבדיקה/לא הוחזר), טופס יצירה עם select ללקוח
+  ולמוצר (מוצרים מסוננים ל-loanStatus=not_loaned בלבד - לא ניתן לבחור מוצר
+  שכבר מושאל), טופס עריכה (סטטוס/תאריך החזרה/הערה), ותצוגת ActionLog inline
+  לכל השאלה (מסונן client-side לפי loanId, כי GET /action-logs לא תומך
+  query param עדיין - מספיק בהיקף הנוכחי).
+- באג אמיתי בתהליך הבדיקה (לא באפליקציה): טאב ישן ב-Browser pane המשיך
+  להציג bundle ישן ("מסך זה עדיין בבנייה") אחרי restart של npm run dev,
+  כנראה בגלל HMR WebSocket שנכשל להתחבר מחדש לתהליך Vite החדש. פתיחת טאב
+  חדש (preview_start מחדש) פתרה את זה מיידית. **Learning לפעמים הבאות:**
+  אחרי כל restart של `npm run dev`, לפתוח טאב Browser pane חדש במקום
+  לנווט מחדש בטאב קיים - חוסך זמן דיבוג.
+- באג נוסף בתהליך הבדיקה: קליקים לפי ref שנשמרו מ-read_page ישן, אחרי
+  שה-DOM כבר השתנה (למשל אחרי submit של טופס), לפעמים פוגעים באלמנט הלא-נכון
+  (ref מספור מתחדש/מתמזג בין renders). **Learning:** לקרוא read_page מחדש
+  ממש לפני כל קליק קריטי, לא להסתמך על refs מ-snapshot קודם אחרי שינוי DOM.
+- Validation מלאה בדפדפן (טאב חדש, לא הישן): יצירת השאלה על "כיסא גלגלים
+  מתקפל מס 2" עם לקוח קיים + שם מאושפז - נשמרה, מופיעה עם סטטוס "מושאל",
+  ActionLog נוצר. פתיחת טופס יצירה נוסף הראתה שרק 2 מוצרים זמינים (לא 3) -
+  מוכיח ש-Product.loanStatus התעדכן בפועל בשרת ונטען מחדש, לא רק אופטימי
+  ב-state המקומי. טאב "מושאל" סינן נכון והראה רק את ההשאלה הפעילה. שתי
+  ההשאלות (הישנה שהוחזרה + החדשה שמושאלת) נשארו ב-DB כנתוני דוגמה תקינים.
+- Learning for next cycle (US-113, מסך משתמשים - האחרון מהמסכים "רגילים"
+  לפני US-114 קטלוג ציבורי): users routes עדיין לא קיימים בכלל בשרת! רק
+  server/store.ts (readUsers/writeUsers/findUserByEmail) קיים, אין
+  server/usersRoutes.ts. צריך לבנות גם ראוטים חדשים (GET/POST/PATCH ל-
+  /api/users, מוגבל ל-super_admin ליצירת super_admin/לניהול חוצה-ארגונים,
+  ו-org_manager יכול ליצור רק coordinator/org_manager בארגון שלו) לפני
+  שבונים את המסך - זה לא רק frontend, יש עוד עבודת backend נסתרת כאן.

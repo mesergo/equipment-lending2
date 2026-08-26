@@ -12,6 +12,7 @@ import {
   ProductsScreen,
   CustomersScreen,
 } from './components/CatalogScreens';
+import LoansScreen from './components/LoansScreen';
 
 function useHashRoute(): string {
   const [hash, setHash] = useState(() => window.location.hash.slice(1) || 'dashboard');
@@ -72,7 +73,7 @@ function RouteContent({ route }: { route: string }) {
     case 'customers':
       return <CustomersScreen />;
     case 'loans':
-      return <ComingSoon label="השאלות" />;
+      return <LoansScreen />;
     case 'payments':
       return <ComingSoon label="תשלומים" />;
     case 'action-logs':
