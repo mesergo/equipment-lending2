@@ -15,6 +15,7 @@ import {
 } from './components/CatalogScreens';
 import LoansScreen from './components/LoansScreen';
 import ActionLogsScreen from './components/ActionLogsScreen';
+import UsersScreen from './components/UsersScreen';
 
 function useHashRoute(): string {
   const [hash, setHash] = useState(() => window.location.hash.slice(1) || 'dashboard');
@@ -40,17 +41,6 @@ function AdminShell() {
       <main className="flex-1 overflow-y-auto">
         <RouteContent route={route} />
       </main>
-    </div>
-  );
-}
-
-// Placeholder for routes not built yet in this pass — replaced screen by screen as each
-// story lands (US-111 generic tables, US-112 loans, US-113 users).
-function ComingSoon({ label }: { label: string }) {
-  return (
-    <div className="p-8">
-      <h1 className="text-xl font-bold mb-2">{label}</h1>
-      <p className="text-gray-500">מסך זה עדיין בבנייה.</p>
     </div>
   );
 }
@@ -81,7 +71,7 @@ function RouteContent({ route }: { route: string }) {
     case 'action-logs':
       return <ActionLogsScreen />;
     case 'users':
-      return <ComingSoon label="משתמשים" />;
+      return <UsersScreen />;
     default:
       return <DashboardView />;
   }

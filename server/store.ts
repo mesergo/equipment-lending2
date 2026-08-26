@@ -38,3 +38,32 @@ export async function findUserByEmail(email: string): Promise<StoredUser | undef
   const all = await readUsers();
   return all.find((u) => u.email.toLowerCase() === needle);
 }
+
+export async function findUserById(id: string): Promise<StoredUser | undefined> {
+  const col = await usersCollection();
+  const user = await col.findOne({ id }, { projection: { _id: 0 } });
+  return user ?? undefined;
+}
+
+export async function createUser(user: StoredUser): Promise<StoredUser> {
+  const col = await usersCollection();
+  try {
+    await col.insertOne({ ...user });
+  } catch (err) {
+    if ((err as { code?: number }).code === 11000) {
+      throw new Error(`כתובת הדואר האלקטרוני ${user.email} כבר בשימוש`);
+    }
+    throw err;
+  }
+  return user;
+}
+
+export async function updateUser(id: string, patch: Partial<StoredUser>): Promise<StoredUser | undefined> {
+  const col = await usersCollection();
+  const updated = await col.findOneAndUpdate(
+    { id },
+    { $set: patch },
+    { returnDocument: 'after', projection: { _id: 0 } }
+  );
+  return updated ?? undefined;
+}

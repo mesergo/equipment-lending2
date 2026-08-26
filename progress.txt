@@ -224,3 +224,29 @@
   entity חדש ל-nav - קל לפספס שנוסף route בלי story תואם. שווה לחזור על
   זה שוב לפני שסוגרים את הבנייה מחדש, לוודא שכל item ב-NAV_ITEMS מקבל
   קומפוננטה אמיתית ולא ComingSoon.
+
+## Iteration 8 (בנייה מחדש) — US-113 (מסך משתמשים)
+- מה נעשה: server/store.ts הורחב עם findUserById/createUser/updateUser
+  (עד עכשיו היו רק readUsers/writeUsers-מלא-להחלפה/findUserByEmail - לא
+  היה אפשר ליצור/לעדכן משתמש בודד). server/usersRoutes.ts נבנה מאפס -
+  GET/POST/PATCH /api/users, עם assignableRoles() שקובע מה כל role יכול
+  להקצות (super_admin=הכל, org_manager=רק org_manager/coordinator בארגון
+  שלו). src/components/UsersScreen.tsx - לא EntityTable גנרי, כי יש שדה
+  סיסמה (write-only, לעולם לא מוצג בחזרה - toPublicUser() בשרת מסנן
+  passwordHash לפני שליחה ללקוח) והרשאות תפקיד תלויות ב-role של המשתמש
+  המחובר עצמו (assignableRoles בצד קליינט תואם בדיוק למה שהשרת יאכוף).
+- Validation מלאה: כ-org_manager, GET /users החזיר רק 2 משתמשים (לא את
+  super_admin - org-scoping עובד); select התפקיד בטופס הראה רק "מנהל
+  ארגון"/"סדרן" (לא "מנהל ראשי"); יצירת coordinator2@example.com הצליחה
+  ומופיע ברשימה. **הבדיקה הכי חשובה**: לא הסתפקתי בלראות שהרשומה נוצרה -
+  התחברתי בפועל (curl POST /api/auth/login) עם החשבון החדש והסיסמה
+  שהזנתי בטופס, וזה הצליח והחזיר role=coordinator org=org-demo נכונים.
+  זה מוכיח את כל השרשרת: form → POST /users → bcrypt.hashSync → Mongo →
+  login → bcrypt.compareSync → JWT - לא רק ש"נשמר משהו".
+- Learning for next cycle (US-114, קטלוג ציבורי - ה-story האחרון): זה
+  דורש route ציבורי חדש (לא requireAuth) - /catalog/:token או דומה, לא
+  hash-based כמו שאר האפליקציה כי צריך שיהיה שיתופי (לינק אמיתי, לא רק
+  #hash שדורש שהאפליקציה כבר טעונה). לבדוק אם window.location.pathname
+  routing נדרש בנוסף ל-hash routing הקיים, או אם אפשר לחיות עם hash גם
+  כאן (#catalog/demo) - צריך להחליט את זה כחלק מה-story, לא היה מתועד
+  ב-PRD המקורי באיזה סוג routing להשתמש.

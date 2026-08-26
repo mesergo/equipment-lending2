@@ -276,8 +276,21 @@ Organization (ארגון)
 
 #### US-113: מסך משתמשים (Users) + ניהול הרשאות
 **Acceptance Criteria:**
-- [ ] רשימת משתמשים + יצירה/עריכה, כולל בחירת תפקיד מבין 3
-- [ ] Typecheck passes; Verify changes work in browser
+- [x] רשימת משתמשים + יצירה/עריכה, כולל בחירת תפקיד מבין 3 — 2026-08-26.
+      גילוי חשוב: `server/usersRoutes.ts` לא היה קיים בכלל (רק store.ts
+      הפנימי) — נבנה מאפס כחלק מה-story הזה, לא רק frontend. הרשאות: super_admin
+      יכול להקצות כל תפקיד לכל ארגון; org_manager יכול להקצות רק
+      org_manager/coordinator בתוך הארגון שלו (לא super_admin, לא ארגון אחר) —
+      נאכף גם בשרת (usersRoutes.ts assignableRoles) וגם ב-UI (הרשימה הנפתחת
+      לא מציעה אפשרויות אסורות מלכתחילה)
+- [x] Typecheck passes; Verify changes work in browser — 2026-08-26. **נבדק
+      בפועל**: כ-org_manager, רשימת המשתמשים מציגה רק 2 משתמשים בארגון שלו
+      (לא את ה-super_admin) — org-scoping עובד; הרשימה הנפתחת לתפקיד מציגה
+      רק "מנהל ארגון"/"סדרן", לא "מנהל ראשי"; יצירת משתמש coordinator חדש
+      הצליחה; **אימות אמיתי**: התחברתי בפועל (curl) עם המשתמש החדש
+      (coordinator2@example.com) והתחברות הצליחה עם role/organizationId
+      נכונים — מוכיח שה-bcrypt hashing בזמן יצירה עובד סוף-לסוף, לא רק
+      שהרשומה נכתבה ל-DB
 
 ### שלב ה' — קטלוג ציבורי + זריעת נתונים
 
