@@ -19,6 +19,15 @@ import { usersRouter } from './usersRoutes';
 const app = express();
 app.use(cors());
 app.use(express.json());
+// Every /api response is dynamic data (catalog availability, loan status, etc.) — without
+// this, browsers can serve a stale cached GET response after a PATCH changes the underlying
+// record (observed directly: a model's price updated via PATCH, confirmed updated by a fresh
+// no-store fetch, but the public catalog page kept rendering the old price from its plain
+// fetch() call until this header was added). Applies to every route below, not just one page.
+app.use('/api', (_req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
 app.use('/api', catalogRouter);
 app.use('/api', loansRouter);
 app.use('/api', paymentsRouter);
