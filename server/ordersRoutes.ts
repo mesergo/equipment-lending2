@@ -7,13 +7,15 @@ import { runReminderSweep } from './reminders';
 import { warehousesStore } from './catalogRoutes';
 import type { OrderRecord, OrderStatus } from '../src/types';
 
-function resolveOrgId(order: OrderRecord): string | undefined {
-  return order.organizationId || warehousesStore.find(order.warehouseId)?.organizationId;
+async function resolveOrgId(order: OrderRecord): Promise<string | undefined> {
+  if (order.organizationId) return order.organizationId;
+  const warehouse = await warehousesStore.find(order.warehouseId);
+  return warehouse?.organizationId;
 }
 
-function canAccessOrder(auth: AuthTokenPayload, order: OrderRecord): boolean {
+async function canAccessOrder(auth: AuthTokenPayload, order: OrderRecord): Promise<boolean> {
   if (auth.role === 'super_admin') return true;
-  return auth.role === 'org_manager' && auth.organizationId === resolveOrgId(order);
+  return auth.role === 'org_manager' && auth.organizationId === (await resolveOrgId(order));
 }
 
 function normalizePhone(phone: string): string {
@@ -43,7 +45,12 @@ ordersRouter.post('/orders', async (req, res) => {
 ordersRouter.get('/orders', requireAuth, async (req: AuthedRequest, res: Response) => {
   const auth = req.auth!;
   const all = await readOrders();
-  const visible = auth.role === 'super_admin' ? all : all.filter((o) => resolveOrgId(o) === auth.organizationId);
+  if (auth.role === 'super_admin') {
+    res.json({ orders: all });
+    return;
+  }
+  const orgIds = await Promise.all(all.map((o) => resolveOrgId(o)));
+  const visible = all.filter((_, i) => orgIds[i] === auth.organizationId);
   res.json({ orders: visible });
 });
 
@@ -55,7 +62,7 @@ ordersRouter.patch('/orders/:id', requireAuth, async (req: AuthedRequest, res: R
     res.status(404).json({ error: 'הזמנה לא נמצאה' });
     return;
   }
-  if (!canAccessOrder(auth, existing)) {
+  if (!(await canAccessOrder(auth, existing))) {
     res.status(403).json({ error: 'אין הרשאה לעדכן הזמנה זו' });
     return;
   }
@@ -113,7 +120,7 @@ ordersRouter.post('/orders/:id/confirm-return', requireAuth, async (req: AuthedR
     res.status(404).json({ error: 'הזמנה לא נמצאה' });
     return;
   }
-  if (!canAccessOrder(auth, existing)) {
+  if (!(await canAccessOrder(auth, existing))) {
     res.status(403).json({ error: 'אין הרשאה לאשר החזרה עבור הזמנה זו' });
     return;
   }

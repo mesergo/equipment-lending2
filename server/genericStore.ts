@@ -1,61 +1,72 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import { getDb } from './db';
+import type { Document } from 'mongodb';
 
-// Small factory for a JSON-file-backed CRUD store - the exact same pattern as
-// server/store.ts (users) and server/ordersStore.ts (orders), generalized so the new
-// catalog entities (products, models, branches, customers) don't each need their own
-// hand-written read/write/create/update boilerplate. Swap for a real MongoDB collection
-// per entity later - callers only use the returned functions, never the file path directly.
-export function createJsonStore<T extends { id: string }>(fileName: string, seed: T[]) {
-  const DATA_DIR = path.resolve(process.cwd(), 'server', 'data');
-  const FILE = path.join(DATA_DIR, fileName);
+// Small factory for a MongoDB-backed CRUD store - the exact same pattern as server/store.ts
+// (users) and server/ordersStore.ts (orders), generalized so the catalog entities
+// (products, models, branches, warehouses, equipment, customers) don't each need their own
+// hand-written read/find/create/update/remove boilerplate. Callers only use the returned
+// functions, never the collection directly.
+export function createMongoStore<T extends { id: string }>(collectionName: string, seed: T[]) {
+  let ready: Promise<unknown> | null = null;
 
-  function ensureSeeded(): void {
-    if (fs.existsSync(FILE)) return;
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(FILE, JSON.stringify(seed, null, 2), 'utf-8');
-  }
-
-  function readAll(): T[] {
-    ensureSeeded();
-    return JSON.parse(fs.readFileSync(FILE, 'utf-8'));
-  }
-
-  function writeAll(items: T[]): void {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    fs.writeFileSync(FILE, JSON.stringify(items, null, 2), 'utf-8');
-  }
-
-  function find(id: string): T | undefined {
-    return readAll().find((i) => i.id === id);
-  }
-
-  function create(item: T): T {
-    const items = readAll();
-    if (items.some((i) => i.id === item.id)) {
-      throw new Error(`${fileName}: id ${item.id} already exists`);
+  // Untyped Document collection rather than Collection<T>: the mongodb driver's generic
+  // helper types (OptionalUnlessRequiredId<T>, WithId<T>) don't resolve cleanly against a
+  // generic `T extends { id: string }` here, so we cast at the boundaries below instead.
+  async function collection() {
+    const db = await getDb();
+    const col = db.collection<Document>(collectionName);
+    if (!ready) {
+      ready = col
+        .createIndex({ id: 1 }, { unique: true })
+        .then(() => col.countDocuments())
+        .then((count) => {
+          if (count === 0 && seed.length > 0) return col.insertMany(seed as Document[]);
+        });
     }
-    writeAll([item, ...items]);
+    await ready;
+    return col;
+  }
+
+  async function readAll(): Promise<T[]> {
+    const col = await collection();
+    const docs = await col.find({}, { projection: { _id: 0 } }).toArray();
+    return docs as unknown as T[];
+  }
+
+  async function find(id: string): Promise<T | undefined> {
+    const col = await collection();
+    const item = await col.findOne({ id }, { projection: { _id: 0 } });
+    return (item as unknown as T | null) ?? undefined;
+  }
+
+  async function create(item: T): Promise<T> {
+    const col = await collection();
+    try {
+      await col.insertOne({ ...item } as Document);
+    } catch (err) {
+      if ((err as { code?: number }).code === 11000) {
+        throw new Error(`${collectionName}: id ${item.id} already exists`);
+      }
+      throw err;
+    }
     return item;
   }
 
-  function update(id: string, patch: Partial<T>): T | undefined {
-    const items = readAll();
-    const idx = items.findIndex((i) => i.id === id);
-    if (idx === -1) return undefined;
-    const updated = { ...items[idx], ...patch };
-    items[idx] = updated;
-    writeAll(items);
-    return updated;
+  async function update(id: string, patch: Partial<T>): Promise<T | undefined> {
+    const col = await collection();
+    const updated = await col.findOneAndUpdate(
+      { id },
+      { $set: patch as Document },
+      { returnDocument: 'after', projection: { _id: 0 } }
+    );
+    return (updated as unknown as T | null) ?? undefined;
   }
 
-  function remove(id: string): boolean {
-    const items = readAll();
-    const next = items.filter((i) => i.id !== id);
-    if (next.length === items.length) return false;
-    writeAll(next);
-    return true;
+  async function remove(id: string): Promise<boolean> {
+    const col = await collection();
+    const res = await col.deleteOne({ id });
+    return res.deletedCount > 0;
   }
 
-  return { readAll, writeAll, find, create, update, remove };
+  return { readAll, find, create, update, remove };
 }

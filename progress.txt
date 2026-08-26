@@ -111,3 +111,35 @@
   ל-.gitignore לפני ה-commit/push הראשון כדי שלא יעלה לגיטהאב הציבורי
   (mesergo/equipment-lending2). המשתמש עדיין לא החליף את הסיסמה הזו - שווה
   להזכיר לו שוב בהזדמנות, היא עדיין יושבת בטקסט גלוי מקומית.
+
+## Iteration 5 — US-005 (מיגרציית generic catalog store ל-Mongo)
+- מה נעשה: server/genericStore.ts נכתב מחדש - createMongoStore<T> במקום
+  createJsonStore<T>, אותה חתימה (readAll/find/create/update/remove; writeAll
+  הוסר כי לא נצרך חיצונית - אותו שיקול כמו ordersStore). server/catalogRoutes.ts
+  עודכן במלואו ל-await (5 GET ציבוריים + customers המוגן + customers/lookup +
+  makeCrud הגנרי לכל 6 הישויות). server/ordersRoutes.ts עודכן גם: resolveOrgId
+  ו-canAccessOrder הפכו async כי הם קוראים ל-warehousesStore.find שכבר לא
+  סינכרוני; ה-route GET /orders עודכן להריץ resolveOrgId על כל ההזמנות במקביל
+  עם Promise.all לפני הסינון (Array.filter לא יכול להיות async ישירות).
+- מכשול טכני משמעותי: TypeScript לא הצליח לפתור את הטיפוסים הגנריים של
+  MongoDB driver (OptionalUnlessRequiredId<T>, WithId<T>) מול `T extends {id:
+  string}` גנרי משלנו - שגיאות "Type 'T' is not assignable to
+  OptionalUnlessRequiredId<T>" בכל מתודה. פתרון: לוותר על `Collection<T>`
+  הטיפוסי ולהשתמש ב-`Collection<Document>` לא-טיפוסי, עם cast מפורש ל-T
+  בגבולות הפונקציות (insertOne/insertMany מקבלים `as Document`, תוצאות
+  find/findOneAndUpdate מקבלות `as unknown as T`). זו תבנית לגיטימית ל-wrapper
+  גנרי כזה - לא "עוקפים" בעיה אמיתית, רק את מגבלת ה-type inference של הדרייבר.
+- Validation מלאה מול Atlas: הרצתי dev:server; GET לכל 5 סוגי הרשימות
+  (products=12, equipment=12, warehouses=10, וכו') החזיר את הזרעים; מחזור CRUD
+  מלא (POST→PATCH→DELETE→GET לוודא היעלמות) נבדק על branches ועל equipment;
+  customers/lookup (ציבורי) ו-GET /customers (מוגן, מסונן לפי ארגון) גם נבדקו.
+  כל רשומות הבדיקה נוקו מה-DB בסוף.
+- Learning: פלט עברית ב-PowerShell מוצג לפעמים כ-"???" בקונסולה (בעיית code
+  page, לא בעיית נתונים אמיתית) - `chcp 65001` + `[Console]::OutputEncoding =
+  [System.Text.Encoding]::UTF8` בתחילת סקריפט PowerShell עוזר, אבל גם בלעדיו
+  אפשר לסמוך על round-trip תקין (delete+verify מוכיח שהנתון עצמו לא התקלקל,
+  רק התצוגה בטרמינל).
+- Learning for next cycle (US-006, ניקוי JSON): לוודא עם grep שאין יותר אף
+  `fs.readFileSync`/`writeFileSync` שמצביע ל-server/data מחוץ להיסטוריית git
+  (server/whatsapp.ts כן ממשיך להשתמש ב-fs לכתיבת whatsapp-log.jsonl - זה
+  בכוונה, לא חלק מהמיגרציה, לא לגעת בו).

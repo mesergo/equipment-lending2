@@ -89,13 +89,19 @@ warehouses/equipment/customers) יעבוד מול Mongo collections במקום �
 לשנות את הממשק (`readAll/find/create/update/remove`) מעבר להפיכתו ל-async.
 
 **Acceptance Criteria:**
-- [ ] `createMongoStore<T>(collectionName, seed)` מחליף את `createJsonStore` — אותה
-      חתימה, async; seed חד-פעמי אם הקולקציה ריקה; unique index על `id`
-- [ ] פרוייקציה `{_id: 0}` בקריאות כדי לא לדלוף `_id` של Mongo לפרונט
-- [ ] `server/catalogRoutes.ts` מעודכן במלואו ל-`await` (כולל `makeCrud` הגנרי
-      ו-`warehousesStore` המיוצא שנצרך מ-`ordersRoutes.ts`)
-- [ ] Typecheck passes; קטלוג נטען, CRUD על ציוד/מוצר/דגם/סניף/מחסן/לקוח עובד מול
-      הממשק
+- [x] `createMongoStore<T>(collectionName, seed)` מחליף את `createJsonStore` — אותה
+      חתימה (בלי `writeAll` שלא נצרך חיצונית), async; seed חד-פעמי אם הקולקציה
+      ריקה; unique index על `id` — 2026-08-26
+- [x] פרוייקציה `{_id: 0}` בקריאות כדי לא לדלוף `_id` של Mongo לפרונט — 2026-08-26
+- [x] `server/catalogRoutes.ts` מעודכן במלואו ל-`await` (כולל `makeCrud` הגנרי
+      ו-`warehousesStore` המיוצא שנצרך מ-`ordersRoutes.ts`) — 2026-08-26
+      (`ordersRoutes.ts`: `resolveOrgId`/`canAccessOrder` הפכו async, וה-GET
+      /orders route עודכן להריץ resolveOrgId על כל ההזמנות עם Promise.all
+      במקום Array.filter הסינכרוני שהיה)
+- [x] Typecheck passes; קטלוג נטען, CRUD על ציוד/מוצר/דגם/סניף/מחסן/לקוח עובד מול
+      הממשק — 2026-08-26 (נבדק בפועל מול Atlas: GET לכל 5 סוגי הרשימות מחזיר את
+      הנתונים הזרועים; מחזור CRUD מלא — create/patch/delete — נבדק על branches
+      ו-equipment; customers/lookup ו-customers המוגן ב-auth גם נבדקו)
 
 #### US-006: ניקוי — קבצי JSON ישנים
 **Description:** אחרי שכל ה-stores עוברים ל-Mongo, אני רוצה לוודא שאין יותר קוד
