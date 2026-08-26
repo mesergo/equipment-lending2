@@ -198,8 +198,24 @@ export default function PublicCatalogView({ token }: { token: string }) {
                   const Icon = pickIcon(name);
                   const isPremium = /פרימיום/.test(name);
                   return (
-                    <label
+                    // A plain div with onClick, not a <label>+hidden-checkbox — the sr-only
+                    // input relied on native label-click forwarding to toggle, which didn't
+                    // fire reliably (reported as "buttons don't work"; reproduced directly:
+                    // a real click on the visible circle left the underlying checkbox
+                    // unchecked). role="checkbox" + aria-checked + keyboard handling keep it
+                    // accessible without depending on that forwarding behavior.
+                    <div
                       key={p.id}
+                      role="checkbox"
+                      aria-checked={isSelected}
+                      tabIndex={0}
+                      onClick={() => toggle(p.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          toggle(p.id);
+                        }
+                      }}
                       className="flex items-center gap-4 bg-white rounded-2xl shadow-sm p-5 cursor-pointer border-2 transition-colors"
                       style={{ borderColor: isSelected ? TEAL : '#f3f4f6' }}
                     >
@@ -233,8 +249,7 @@ export default function PublicCatalogView({ token }: { token: string }) {
                       >
                         {isSelected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
                       </span>
-                      <input type="checkbox" checked={isSelected} onChange={() => toggle(p.id)} className="sr-only" />
-                    </label>
+                    </div>
                   );
                 })}
               </div>
