@@ -160,12 +160,24 @@ Organization (ארגון)
 במערכת החיה (הטקסט המתועד אוטומטית: "מנהל ארגון X עדכן... תאריך ... סטטוס").
 
 **Acceptance Criteria:**
-- [ ] store + ראוטים ל-Loans, org-scoped (super_admin רואה הכל)
-- [ ] יצירת Loan → Product.loanStatus הופך ל-`loaned` (atomic, לא race)
-- [ ] עדכון סטטוס ל-`returned` → Product.loanStatus חוזר ל-`not_loaned`
-- [ ] כל create/update על Loan כותב שורת ActionLog (performedBy מה-auth token)
-- [ ] Typecheck passes; מחזור מלא (יצירה→עדכון→החזרה) נבדק מול Atlas, כולל
-      וידוא ש-Product.loanStatus ו-ActionLog באמת השתנו כצפוי
+- [x] store + ראוטים ל-Loans, org-scoped (super_admin רואה הכל) — 2026-08-26.
+      coordinator כן יכול ליצור/לעדכן (זה בדיוק התפקיד שלו) — לא נחסם כמו
+      בקטלוג
+- [x] יצירת Loan → Product.loanStatus הופך ל-`loaned` (atomic, לא race) —
+      2026-08-26. גם: יצירת השאלה על מוצר שכבר `loaned` נדחית מראש עם 409
+      (בדיקה לפני היצירה, לא רק אחריה)
+- [x] עדכון סטטוס ל-`returned` → Product.loanStatus חוזר ל-`not_loaned` —
+      2026-08-26
+- [x] כל create/update על Loan כותב שורת ActionLog (performedBy מה-auth token)
+      — 2026-08-26. הטקסט מנוסח בעברית בדומה למה שנצפה במערכת החיה
+- [x] Typecheck passes; מחזור מלא (יצירה→עדכון→החזרה) נבדק מול Atlas, כולל
+      וידוא ש-Product.loanStatus ו-ActionLog באמת השתנו כצפוי — 2026-08-26,
+      מחזור מלא נבדק בפועל: coordinator יוצר השאלה על מוצר אמיתי מהזרעה
+      (US-115) → product.loanStatus=loaned מאומת; ניסיון השאלה כפולה נדחה
+      עם 409; manager מחזיר (PATCH status=returned) → product.loanStatus
+      חוזר ל-not_loaned מאומת; GET /action-logs מציג 2 רשומות, ממוינות
+      מהחדש לישן, עם טקסט עברי תקין. השאלה הזו (עכשיו returned) נשארה
+      ב-DB כחלק מנתוני הדוגמה - לא נוקתה, כי היא מצב תקין ולא "יתום".
 
 #### US-108: API ל-Payments (מודל נתונים בלבד)
 **Description:** CRUD רגיל, בלי שום קריאה אמיתית לחברת סליקה (Non-Goal, §3).
@@ -179,8 +191,10 @@ Organization (ארגון)
 לקריאה כדי שהאדמין יוכל להציג את הלוג (כמו מסך "לוגי פעולות" במערכת החיה).
 
 **Acceptance Criteria:**
-- [ ] `GET /action-logs` מוגן, org-scoped, ממוין מהחדש לישן
-- [ ] Typecheck passes; נבדק מול רשומות אמיתיות שנוצרו ב-US-107
+- [x] `GET /action-logs` מוגן, org-scoped, ממוין מהחדש לישן — 2026-08-26
+      (נבנה בתוך loansRoutes.ts יחד עם US-107, כי actionLogsStore גר שם)
+- [x] Typecheck passes; נבדק מול רשומות אמיתיות שנוצרו ב-US-107 — 2026-08-26
+      (ראו הבדיקה תחת US-107 — אותו מחזור בדיקה כיסה את שניהם ביחד)
 
 ### שלב ד' — Frontend (תלוי בשלב ג')
 
@@ -240,10 +254,20 @@ Organization (ארגון)
 סניף, מחסן, קטגוריה, דגם, כמה מוצרים, לקוח — כדי שאפשר יהיה לבדוק את כל
 המסכים עם נתונים אמיתיים בלי להזין הכל ידנית.
 
+**הוזז מוקדם יותר בפועל** (בין US-106 ל-US-107) — כי US-107 (Loans) לא ניתן
+היה לבדוק אמיתית בלי ארגון+מוצר+לקוח אמיתיים ומקושרים. ראו learning ב-
+progress.txt (Iteration 2).
+
 **Acceptance Criteria:**
-- [ ] `npm run seed:demo` (סקריפט חדש) יוצר ארגון דוגמה מלא בכל הישויות
-- [ ] אידמפוטנטי (מסרב לרוץ שוב אם כבר קיים)
-- [ ] נבדק בפועל: מריצים, ורואים את הנתונים בכל מסכי ה-UI
+- [x] `npm run seed:demo` (סקריפט חדש) יוצר ארגון דוגמה מלא בכל הישויות —
+      2026-08-26 (`server/seed-demo.ts`: org-demo + סניף + מחסן + קטגוריה +
+      דגם + 3 מוצרים + לקוח — כותב ישירות ל-Mongo, לא דרך ה-API הציבורי,
+      כדי לשלוט ב-id הקבוע)
+- [x] אידמפוטנטי (מסרב לרוץ שוב אם כבר קיים) — 2026-08-26, נבדק: הרצה שנייה
+      מסרבת
+- [x] נבדק בפועל: מריצים, ורואים את הנתונים בכל מסכי ה-UI — חלקית: הנתונים
+      אומתו דרך ה-API (GET לכל endpoint) וגם שימשו בפועל לבדיקת מחזור
+      Loans מלא ב-US-107. אימות חזותי בדפדפן ימתין ל-US-110+ (עדיין אין UI)
 
 ## 5. Progress Log
 

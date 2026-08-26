@@ -12,11 +12,13 @@ import { signToken, requireAuth } from './auth';
 import type { AuthedRequest } from './auth';
 import { getDb } from './db';
 import { catalogRouter } from './catalogRoutes';
+import { loansRouter } from './loansRoutes';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use('/api', catalogRouter);
+app.use('/api', loansRouter);
 
 function toPublicUser(user: Awaited<ReturnType<typeof findUserByEmail>>) {
   if (!user) return null;
