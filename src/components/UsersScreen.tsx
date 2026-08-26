@@ -107,7 +107,7 @@ export default function UsersScreen() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold">משתמשים</h1>
         {!creating && !editingId && (
-          <button onClick={startCreate} className="bg-blue-600 text-white text-sm rounded px-3 py-1.5">
+          <button onClick={startCreate} className="bg-teal-600 text-white text-sm rounded px-3 py-1.5">
             + חדש
           </button>
         )}
@@ -149,7 +149,7 @@ export default function UsersScreen() {
           <div className="flex gap-2">
             <button
               onClick={creating ? submitCreate : () => submitEdit(editingId as string)}
-              className="bg-blue-600 text-white text-sm rounded px-3 py-1.5"
+              className="bg-teal-600 text-white text-sm rounded px-3 py-1.5"
             >
               שמור
             </button>
@@ -188,7 +188,7 @@ export default function UsersScreen() {
                   <td className="px-3 py-2">{ROLE_LABELS[u.role]}</td>
                   <td className="px-3 py-2">{u.title}</td>
                   <td className="px-3 py-2 text-left">
-                    <button onClick={() => startEdit(u)} className="text-blue-600 text-xs">
+                    <button onClick={() => startEdit(u)} className="text-teal-600 text-xs">
                       עריכה
                     </button>
                   </td>

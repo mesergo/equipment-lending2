@@ -140,7 +140,7 @@ export default function EntityTable<T extends { id: string }>({ title, apiPath, 
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold">{title}</h1>
         {!creating && !editingId && (
-          <button onClick={startCreate} className="bg-blue-600 text-white text-sm rounded px-3 py-1.5">
+          <button onClick={startCreate} className="bg-teal-600 text-white text-sm rounded px-3 py-1.5">
             + חדש
           </button>
         )}
@@ -160,7 +160,7 @@ export default function EntityTable<T extends { id: string }>({ title, apiPath, 
           <div className="flex gap-2">
             <button
               onClick={creating ? submitCreate : submitEdit}
-              className="bg-blue-600 text-white text-sm rounded px-3 py-1.5"
+              className="bg-teal-600 text-white text-sm rounded px-3 py-1.5"
             >
               שמור
             </button>
@@ -203,7 +203,7 @@ export default function EntityTable<T extends { id: string }>({ title, apiPath, 
                     </td>
                   ))}
                   <td className="px-3 py-2 text-left whitespace-nowrap">
-                    <button onClick={() => startEdit(item)} className="text-blue-600 text-xs me-3">
+                    <button onClick={() => startEdit(item)} className="text-teal-600 text-xs me-3">
                       עריכה
                     </button>
                     <button onClick={() => handleDelete(item.id)} className="text-red-600 text-xs">

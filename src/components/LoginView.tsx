@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Package } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginView() {
@@ -22,25 +23,31 @@ export default function LoginView() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow p-8 w-full max-w-sm">
-        <h1 className="text-xl font-bold mb-6 text-center">התחבר לחשבון שלך</h1>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 w-full max-w-sm">
+        <div className="flex flex-col items-center mb-8">
+          <div className="h-14 w-14 rounded-2xl bg-teal-600 flex items-center justify-center mb-3">
+            <Package className="w-7 h-7 text-white" strokeWidth={2} />
+          </div>
+          <h1 className="text-xl font-bold text-gray-900">lendingCRM</h1>
+          <p className="text-sm text-gray-400 mt-1">התחבר לחשבון שלך</p>
+        </div>
 
-        <label className="block text-sm font-medium mb-1">כתובת דואר אלקטרוני</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">כתובת דואר אלקטרוני</label>
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full border rounded px-3 py-2 mb-4"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
           required
         />
 
-        <label className="block text-sm font-medium mb-1">סיסמה</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">סיסמה</label>
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full border rounded px-3 py-2 mb-4"
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent"
           required
         />
 
@@ -49,7 +56,7 @@ export default function LoginView() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full bg-blue-600 text-white rounded py-2 font-medium disabled:opacity-50"
+          className="w-full bg-teal-600 hover:bg-teal-700 text-white rounded-lg py-2.5 font-medium transition-colors disabled:opacity-50"
         >
           {submitting ? '...' : 'התחבר'}
         </button>

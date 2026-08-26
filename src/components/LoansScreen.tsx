@@ -133,7 +133,7 @@ export default function LoansScreen() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-bold">השאלות</h1>
         {!creating && (
-          <button onClick={startCreate} className="bg-blue-600 text-white text-sm rounded px-3 py-1.5">
+          <button onClick={startCreate} className="bg-teal-600 text-white text-sm rounded px-3 py-1.5">
             + השאלה חדשה
           </button>
         )}
@@ -145,7 +145,7 @@ export default function LoansScreen() {
             key={t.value}
             onClick={() => setTab(t.value)}
             className={`text-sm rounded-full px-3 py-1 border ${
-              tab === t.value ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600'
+              tab === t.value ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600'
             }`}
           >
             {t.label}
@@ -189,7 +189,7 @@ export default function LoansScreen() {
           </div>
           {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
           <div className="flex gap-2">
-            <button onClick={submitCreate} className="bg-blue-600 text-white text-sm rounded px-3 py-1.5">
+            <button onClick={submitCreate} className="bg-teal-600 text-white text-sm rounded px-3 py-1.5">
               שמור
             </button>
             <button onClick={() => setCreating(false)} className="text-sm text-gray-600 px-3 py-1.5">
@@ -220,7 +220,7 @@ export default function LoansScreen() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs rounded-full px-2 py-1 bg-gray-100">{STATUS_LABELS[loan.status]}</span>
-                  <button onClick={() => startEdit(loan)} className="text-blue-600 text-xs">
+                  <button onClick={() => startEdit(loan)} className="text-teal-600 text-xs">
                     עריכה
                   </button>
                 </div>
@@ -250,7 +250,7 @@ export default function LoansScreen() {
                   </div>
                   {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
                   <div className="flex gap-2 mb-3">
-                    <button onClick={() => submitEdit(loan.id)} className="bg-blue-600 text-white text-sm rounded px-3 py-1.5">
+                    <button onClick={() => submitEdit(loan.id)} className="bg-teal-600 text-white text-sm rounded px-3 py-1.5">
                       שמור
                     </button>
                     <button onClick={() => setEditingId(null)} className="text-sm text-gray-600 px-3 py-1.5">
