@@ -183,8 +183,10 @@ Organization (ארגון)
 **Description:** CRUD רגיל, בלי שום קריאה אמיתית לחברת סליקה (Non-Goal, §3).
 
 **Acceptance Criteria:**
-- [ ] store + ראוטים org-scoped
-- [ ] Typecheck passes; CRUD נבדק מול Atlas
+- [x] store + ראוטים org-scoped — 2026-08-26
+- [x] Typecheck passes; CRUD נבדק מול Atlas — 2026-08-26 (יצירת תשלום ללקוח
+      הדוגמה, chargeAmount=150/פיקדון; PATCH ל-wasCharged=true+status=charged;
+      GET מציג את זה ל-manager. נשאר ב-DB כנתוני דוגמה לגיטימיים)
 
 #### US-109: API ל-ActionLog (קריאה בלבד כלפי לקוחות ה-API)
 **Description:** ActionLog נכתב רק פנימית (מ-US-107 ודומיו), אבל צריך endpoint
