@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Package } from 'lucide-react';
+import { Package, ChevronLeft } from 'lucide-react';
 import type { Organization, Product, Model } from '../types';
 
 // Public, no-login page addressed by the organization's token (#catalog/:token). Visual
@@ -157,6 +157,25 @@ export default function PublicCatalogView({ token }: { token: string }) {
             })}
           </div>
         )}
+
+        {/* "Continue" step control — enabled once at least one product is selected, matching
+            the reference. No next step is wired up yet (this page only covers product
+            selection, per PRD.md US-114's scope) — clicking it doesn't submit anything yet. */}
+        {products.length > 0 && (
+          <button
+            type="button"
+            disabled={selected.size === 0}
+            className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 mt-8 font-semibold text-white transition-colors disabled:cursor-not-allowed"
+            style={{ backgroundColor: selected.size > 0 ? TEAL : '#d1d5db' }}
+          >
+            <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
+            המשך לשלב הבא
+          </button>
+        )}
+
+        <p className="text-center text-xs text-gray-400 tracking-widest mt-12">
+          {organization.name} &bull; מערכת ניהול ציוד דיגיטלית &bull; V1.0
+        </p>
       </div>
     </div>
   );
