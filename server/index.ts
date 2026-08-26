@@ -31,7 +31,7 @@ app.use('/api', catalogRouter);
 app.use('/api', aiSearchRouter);
 app.use('/api', setupRouter);
 
-function toPublicUser(user: ReturnType<typeof findUserByUsername>) {
+function toPublicUser(user: Awaited<ReturnType<typeof findUserByUsername>>) {
   if (!user) return null;
   return {
     id: user.id,
@@ -42,7 +42,7 @@ function toPublicUser(user: ReturnType<typeof findUserByUsername>) {
   };
 }
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body || {};
 
   if (!username || !password) {
@@ -50,7 +50,7 @@ app.post('/api/auth/login', (req, res) => {
     return;
   }
 
-  const user = findUserByUsername(String(username));
+  const user = await findUserByUsername(String(username));
   if (!user || !bcrypt.compareSync(String(password), user.passwordHash)) {
     res.status(401).json({ error: 'שם משתמש או סיסמה שגויים' });
     return;
@@ -59,8 +59,8 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ token: signToken(user), user: toPublicUser(user) });
 });
 
-app.get('/api/auth/me', requireAuth, (req: AuthedRequest, res) => {
-  const user = findUserByUsername(req.auth!.username);
+app.get('/api/auth/me', requireAuth, async (req: AuthedRequest, res) => {
+  const user = await findUserByUsername(req.auth!.username);
   if (!user) {
     res.status(401).json({ error: 'המשתמש לא נמצא' });
     return;

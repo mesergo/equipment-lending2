@@ -1,10 +1,8 @@
 import { Router } from 'express';
-import fs from 'node:fs';
-import path from 'node:path';
 import bcrypt from 'bcryptjs';
 import { randomUUID } from 'node:crypto';
 import type { StoredUser } from './store';
-import { writeUsers } from './store';
+import { readUsers, writeUsers } from './store';
 
 // One-time REMOTE setup, for hosts where you only have FTP + a control panel and no SSH/terminal
 // to run `npm run seed:users` yourself (this is exactly the situation on plain shared hosting -
@@ -15,9 +13,8 @@ import { writeUsers } from './store';
 //  - Refuses everything unless SETUP_SECRET is set in the server's environment variables AND the
 //    caller provides the same value - without it, this route always 403s. Unset SETUP_SECRET in
 //    your panel once you've used this, so the route goes back to refusing everyone.
-//  - Refuses if server/data/users.json already exists - it can only ever create the starter
-//    accounts the very first time, never reset or overwrite real accounts later.
-const USERS_FILE = path.resolve(process.cwd(), 'server', 'data', 'users.json');
+//  - Refuses if the `users` MongoDB collection already has accounts in it - it can only ever
+//    create the starter accounts the very first time, never reset or overwrite real accounts.
 
 interface SeedAccount {
   username: string;
@@ -38,7 +35,7 @@ const DEFAULT_ACCOUNTS: SeedAccount[] = [
 
 export const setupRouter = Router();
 
-setupRouter.post('/setup/seed-users', (req, res) => {
+setupRouter.post('/setup/seed-users', async (req, res) => {
   const expected = process.env.SETUP_SECRET;
   const provided = String(req.query.secret || req.body?.secret || '');
 
@@ -50,8 +47,9 @@ setupRouter.post('/setup/seed-users', (req, res) => {
     res.status(403).json({ error: 'secret שגוי או חסר' });
     return;
   }
-  if (fs.existsSync(USERS_FILE)) {
-    res.status(409).json({ error: 'server/data/users.json כבר קיים - ההקמה כבר בוצעה קודם לכן' });
+  const existing = await readUsers();
+  if (existing.length > 0) {
+    res.status(409).json({ error: 'כבר יש חשבונות ב-MongoDB - ההקמה כבר בוצעה קודם לכן' });
     return;
   }
 
@@ -63,7 +61,7 @@ setupRouter.post('/setup/seed-users', (req, res) => {
     role: acc.role,
     organizationId: acc.organizationId,
   }));
-  writeUsers(users);
+  await writeUsers(users);
 
   res.json({
     ok: true,

@@ -1,5 +1,4 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import { getDb } from './db';
 
 export interface StoredUser {
   id: string;
@@ -11,26 +10,40 @@ export interface StoredUser {
   organizationId?: string;
 }
 
-const DATA_DIR = path.resolve(process.cwd(), 'server', 'data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const COLLECTION = 'users';
 
-// NOTE: this is a small JSON-file store, only meant to get real login working quickly
-// without any external service. When you move the app onto your own MongoDB server,
-// replace the three functions below with calls to a `users` collection there — the rest
-// of the app (JWT signing/verification, the /api/auth routes, the React AuthContext) does
-// not need to change at all.
+let indexesReady: Promise<unknown> | null = null;
 
-export function readUsers(): StoredUser[] {
-  if (!fs.existsSync(USERS_FILE)) return [];
-  return JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
+async function usersCollection() {
+  const db = await getDb();
+  const col = db.collection<StoredUser>(COLLECTION);
+  // Case-insensitive unique index on username (collation strength 2 = case-insensitive),
+  // mirrors the case-insensitive lookup findUserByUsername already did against the JSON file.
+  if (!indexesReady) {
+    indexesReady = col.createIndex(
+      { username: 1 },
+      { unique: true, collation: { locale: 'en', strength: 2 } }
+    );
+  }
+  await indexesReady;
+  return col;
 }
 
-export function writeUsers(users: StoredUser[]): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
+export async function readUsers(): Promise<StoredUser[]> {
+  const col = await usersCollection();
+  return col.find({}, { projection: { _id: 0 } }).toArray();
 }
 
-export function findUserByUsername(username: string): StoredUser | undefined {
+// Replaces the whole collection with `users` — matches the old JSON-file behavior (seed
+// scripts build the full starter-account array once and call this exactly once).
+export async function writeUsers(users: StoredUser[]): Promise<void> {
+  const col = await usersCollection();
+  await col.deleteMany({});
+  if (users.length > 0) await col.insertMany(users);
+}
+
+export async function findUserByUsername(username: string): Promise<StoredUser | undefined> {
   const needle = username.toLowerCase();
-  return readUsers().find((u) => u.username.toLowerCase() === needle);
+  const all = await readUsers();
+  return all.find((u) => u.username.toLowerCase() === needle);
 }

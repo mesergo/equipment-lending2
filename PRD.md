@@ -59,13 +59,14 @@ progress.txt, Iteration 1), ובכל מקרה Atlas זמין וכבר מחובר
 הקוראים מעבר להפיכתם ל-async.
 
 **Acceptance Criteria:**
-- [ ] הפונקציות הופכות ל-async, קוראות/כותבות ל-collection `users` (unique index על
-      `username`, lowercase)
-- [ ] כל הקוראים (`server/index.ts` login/me, `server/seed-users.ts`,
-      `server/setupRoutes.ts`) מעודכנים ל-`await`
-- [ ] `npm run seed:users` יוצר משתמשים ב-Mongo (לא ב-JSON), ומסרב לרוץ שוב אם כבר יש
-      מסמכים בקולקציה
-- [ ] Typecheck passes; התחברות עובדת ידנית מול השרת המקומי מול ה-Mongo של US-001
+- [x] הפונקציות הופכות ל-async, קוראות/כותבות ל-collection `users` (unique index על
+      `username`, lowercase) — 2026-08-26
+- [x] כל הקוראים (`server/index.ts` login/me, `server/seed-users.ts`,
+      `server/setupRoutes.ts`) מעודכנים ל-`await` — 2026-08-26
+- [x] `npm run seed:users` יוצר משתמשים ב-Mongo (לא ב-JSON), ומסרב לרוץ שוב אם כבר יש
+      מסמכים בקולקציה — 2026-08-26 (נבדק: הרצה שנייה מסרבת בהצלחה)
+- [x] Typecheck passes; התחברות עובדת ידנית מול Atlas — 2026-08-26 (נבדק עם curl:
+      login מצליח, לא תלוי-רישיות (ADMIN==admin), וסיסמה שגויה נדחית)
 
 #### US-004: מיגרציית `server/ordersStore.ts` (orders) ל-Mongo
 **Description:** כמו US-003 אבל לקולקציית `orders`, כולל ה-seed הראשוני מ-

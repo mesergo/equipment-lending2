@@ -60,6 +60,26 @@
   לו בלי await - כשהופכים אותו ל-async צריך לעדכן את כל שלושת הקבצים האלה
   באותו מחזור, אחרת typecheck ייפול על "Promise is not assignable".
 
+## Iteration 3 — US-003 (מיגרציית users ל-Mongo)
+- מה נעשה: server/store.ts עודכן לגמרי ל-async מול collection 'users' (unique
+  index case-insensitive על username, collation strength 2). כל שלושת הקוראים
+  עודכנו: server/index.ts (login/me + toPublicUser עם Awaited<ReturnType<...>>
+  כי הטיפוס הפך ל-Promise), server/seed-users.ts (import 'dotenv/config' נוסף כי
+  הסקריפט רץ standalone עם tsx, לא דרך index.ts; process.exit() בסוף כי
+  MongoClient משאיר event loop פתוח), server/setupRoutes.ts (readUsers().length
+  במקום fs.existsSync).
+- Validation מלאה (לא רק typecheck): הרצתי בפועל `npm run seed:users` מול
+  Atlas האמיתי - נוצרו 5 חשבונות; הרצה שנייה סירבה כמצופה (idempotent); הרצתי
+  `npm run dev:server`, ראיתי "Connected to MongoDB" בלוג, ובדקתי עם curl:
+  login עם admin/ChangeMe!Admin1 מצליח ומחזיר JWT תקין; login עם ADMIN (אותיות
+  גדולות) גם מצליח (מוודא שה-collation case-insensitive עובד); login עם סיסמה
+  שגויה נדחה כראוי (401).
+- Learning for next cycle (US-004, orders store): צריך גם process cleanup דומה
+  אם כותבים סקריפטים standalone נוספים - MongoClient לא סוגר את עצמו לבד.
+  גם לזכור: תמיד להריץ dev:server (לא רק typecheck) ולבדוק עם curl בפועל לפני
+  שמסמנים story שנוגע ב-DB כ-"עובד" - typecheck פסי לא אומר שה-collation/
+  ה-connection string נכונים בפועל.
+
 ## גילוי אבטחה — .vscode/sftp.json (2026-08-26)
 - בזמן העברת התיקייה ל-Desktop התגלה קובץ `.vscode/sftp.json` עם סיסמת SFTP
   בטקסט גלוי לשרת פרודקשן (103.95.119.21, rental.message.co.il). נוסף מיידית
