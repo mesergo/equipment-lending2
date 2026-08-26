@@ -27,3 +27,42 @@
   "גמורה" בלי אימות אמיתי.
 - Learning for next cycle: לפני שמנסים שוב את US-001, לבקש מהמשתמש להריץ את
   Docker Desktop ידנית (מהמסך שלו) ולוודא עם `docker ps` שהוא רץ, ורק אז להמשיך.
+
+## Resolution — US-001 הוחלף ב-Atlas (2026-08-26)
+- המשתמש ביקש להתחבר ל-MongoDB Atlas דרך Google במקום Docker מקומי. יש כבר פרויקט
+  Atlas קיים בשם BOTWA עם קלאסטר פעיל (Cluster0, e6zhbxe.mongodb.net).
+- נוצר משתמש DB ייעודי לאפליקציה הזו: `equipment_lending_app`, role
+  readWriteAnyDatabase — במכוון לא נעשה שימוש חוזר במשתמש `botwa` הקיים (Atlas
+  admin), כדי לא לתת לאפליקציה הרשאות רחבות מדי ולא לחשוף/לגעת בסיסמה של משתמש
+  משותף אחר.
+- IP Access List כבר כולל 0.0.0.0/0 (פתוח), אז לא נדרש שינוי שם.
+- MONGODB_URI נכתב ל-`.env` המקומי (לא ל-git): כולל את שם המשתמש/סיסמה החדשים +
+  שם מסד הנתונים `equipment-lending` בנתיב ה-URI (חשוב - בלי זה Mongo יתחבר ל-DB
+  ברירת מחדל ("test") ולא לזה שבו כל הקוד מצפה לעבוד).
+- Learning: כדי לקבל סיסמה בפועל דרך ה-UI של Atlas צריך ליצור משתמש חדש (Atlas לא
+  חושף סיסמאות קיימות בחזרה) - כפתור "Autogenerate Secure Password" + "SHOW" חושף
+  אותה כטקסט גלוי במסך, שם אפשר לקרוא אותה מ-screenshot.
+
+## Iteration 2 — US-002 (מודול חיבור Mongo)
+- מה נעשה: `npm install mongodb`; נוצר `server/db.ts` עם `getDb()` (חיבור יחיד,
+  cached, זורק שגיאה ברורה אם MONGODB_URI חסר - אותה תבנית כמו JWT_SECRET ב-
+  server/auth.ts); `server/index.ts` עודכן כך ש-`app.listen` וה-reminder sweep
+  רצים רק אחרי ש-getDb() מצליח, עם process.exit(1) והודעה ברורה אם החיבור נכשל.
+- Validation: `npm run lint` (tsc --noEmit) - עובר נקי עבור הקבצים שנגעתי בהם.
+  יש 2 שגיאות קיימות-מראש ב-InventoryView.tsx (קומפוננטת legacy מתה, מיועדת
+  להסרה ב-US-012) - לא קשורות לשינוי הזה, לא חסמו את ה-commit.
+- Files: server/db.ts (חדש), server/index.ts, package.json/package-lock.json
+  (תלות mongodb), .env.example (MONGODB_URI מתועד), .env (המחרוזת האמיתית -
+  לא ב-git).
+- Learning for next cycle (US-003, users store): server/store.ts הנוכחי הוא
+  סינכרוני לגמרי (readUsers/writeUsers/findUserByUsername). כל הקוראים שלו
+  (server/index.ts login/me, server/seed-users.ts, server/setupRoutes.ts) קוראים
+  לו בלי await - כשהופכים אותו ל-async צריך לעדכן את כל שלושת הקבצים האלה
+  באותו מחזור, אחרת typecheck ייפול על "Promise is not assignable".
+
+## גילוי אבטחה — .vscode/sftp.json (2026-08-26)
+- בזמן העברת התיקייה ל-Desktop התגלה קובץ `.vscode/sftp.json` עם סיסמת SFTP
+  בטקסט גלוי לשרת פרודקשן (103.95.119.21, rental.message.co.il). נוסף מיידית
+  ל-.gitignore לפני ה-commit/push הראשון כדי שלא יעלה לגיטהאב הציבורי
+  (mesergo/equipment-lending2). המשתמש עדיין לא החליף את הסיסמה הזו - שווה
+  להזכיר לו שוב בהזדמנות, היא עדיין יושבת בטקסט גלוי מקומית.

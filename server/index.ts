@@ -21,6 +21,7 @@ import { catalogRouter } from './catalogRoutes';
 import { aiSearchRouter } from './aiSearchRoutes';
 import { setupRouter } from './setupRoutes';
 import { runReminderSweep } from './reminders';
+import { getDb } from './db';
 
 const app = express();
 app.use(cors());
@@ -87,10 +88,6 @@ if (fs.existsSync(path.join(DIST_DIR, 'index.html'))) {
 // port themselves and expose it as process.env.PORT - that takes priority when present. Falls
 // back to AUTH_SERVER_PORT (local dev / a plain VPS) and then 4001.
 const PORT = Number(process.env.PORT) || Number(process.env.AUTH_SERVER_PORT) || 4001;
-app.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
-  console.log('No users yet? Run: npm run seed:users');
-});
 
 // WhatsApp return reminders: checks every REMINDER_CHECK_INTERVAL_MINUTES (default 60) whether
 // any order needs a reminder today. Runs as long as this process runs — no browser tab required.
@@ -108,5 +105,20 @@ function runSweepAndLog() {
     .catch((err) => console.error('[reminders] sweep failed', err));
 }
 
-runSweepAndLog(); // once on startup, so a fresh `npm run dev` shows something immediately
-setInterval(runSweepAndLog, REMINDER_INTERVAL_MS);
+// Wait for MongoDB before accepting any traffic — a route that hits the DB before it's
+// connected would otherwise fail with a confusing error deep in some store call instead of a
+// clear one here at startup.
+getDb()
+  .then(() => {
+    console.log('Connected to MongoDB');
+    app.listen(PORT, () => {
+      console.log(`Server listening on http://localhost:${PORT}`);
+      console.log('No users yet? Run: npm run seed:users');
+    });
+    runSweepAndLog(); // once on startup, so a fresh `npm run dev` shows something immediately
+    setInterval(runSweepAndLog, REMINDER_INTERVAL_MS);
+  })
+  .catch((err) => {
+    console.error('Failed to connect to MongoDB — check MONGODB_URI in .env:', err);
+    process.exit(1);
+  });

@@ -27,15 +27,14 @@
 
 ### שלב א' — תשתית Mongo
 
-#### US-001: Docker Compose ל-MongoDB מקומי
-**Description:** כמפתח, אני רוצה `docker-compose.yml` שמריץ MongoDB מקומי, כדי שיהיה
-מסד נתונים אמיתי לפתח ולבדוק מולו.
+#### US-001: ~~Docker Compose ל-MongoDB מקומי~~ — הוחלף ב-Atlas
+**סטטוס:** לא נדרש יותר. הוחלט להשתמש ב-MongoDB Atlas הקיים (פרויקט BOTWA, Cluster0)
+במקום MongoDB מקומי — Docker Desktop לא הצליח לעלות בסביבת האוטומציה (ראה
+progress.txt, Iteration 1), ובכל מקרה Atlas זמין וכבר מחובר. נוצר משתמש DB ייעודי
+`equipment_lending_app` (readWriteAnyDatabase, לא המשתמש המשותף `botwa`), ו-
+`MONGODB_URI` כבר מוגדר ב-`.env` המקומי (לא ב-git).
 
-**Acceptance Criteria:**
-- [ ] `docker-compose.yml` בשורש הפרויקט עם שירות `mongo` (image `mongo:7`), פורט
-      27017, volume בשם לפרסיסטנטיות
-- [ ] `docker compose up -d` מרים קונטיינר תקין (`docker ps` מראה אותו רץ)
-- [ ] מתועד ב-README: `docker compose up -d` כצעד ראשון לפני `npm run dev`
+- [x] MongoDB זמין ונגיש (Atlas, לא Docker) — 2026-08-26
 
 #### US-002: מודול חיבור Mongo (`server/db.ts`)
 **Description:** כמפתח, אני רוצה מודול יחיד שמנהל את חיבור ה-MongoDB (connect פעם
@@ -43,12 +42,14 @@
 
 **Acceptance Criteria:**
 - [ ] `server/db.ts` מייצא `getDb(): Promise<Db>` שמתחבר לפי `MONGODB_URI`
-      (ברירת מחדל `mongodb://127.0.0.1:27017/equipment-lending` לפיתוח מקומי)
-      ומחזיר את אותו חיבור בקריאות חוזרות
-- [ ] `.env.example` מתעדכן עם `MONGODB_URI`
-- [ ] `server/index.ts` מחכה ל-`getDb()` לפני `app.listen` (כשל חיבור עוצר את השרת עם
-      הודעה ברורה, לא נכשל בשקט מאוחר יותר)
-- [ ] Typecheck passes (`npm run lint`)
+      (אין ברירת מחדל בקוד — `MONGODB_URI` חובה כעת, כמו `JWT_SECRET`; זריקת שגיאה
+      ברורה אם הוא חסר, לפי התבנית הקיימת ב-`server/auth.ts`) ומחזיר את אותו חיבור
+      בקריאות חוזרות
+- [x] `.env.example` מתעדכן עם `MONGODB_URI` — 2026-08-26
+- [x] `server/index.ts` מחכה ל-`getDb()` לפני `app.listen` (כשל חיבור עוצר את השרת עם
+      הודעה ברורה, לא נכשל בשקט מאוחר יותר) — 2026-08-26
+- [x] Typecheck passes (`npm run lint`) — 2026-08-26 (2 שגיאות קיימות-מראש ב-
+      `InventoryView.tsx`, לא קשורות לשינוי הזה, ראה US-012)
 
 ### שלב ב' — מיגרציית ה-stores (תלוי ב-US-002)
 
