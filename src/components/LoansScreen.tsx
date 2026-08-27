@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Plus, Pencil, Inbox, HandCoins } from 'lucide-react';
 import { useAuthedFetch } from '../context/AuthContext';
 import type { Loan, LoanStatus, Product, Customer, ActionLog } from '../types';
 
@@ -9,6 +10,13 @@ const STATUS_LABELS: Record<LoanStatus, string> = {
   pending_review: 'בבדיקה',
 };
 
+const STATUS_BADGE: Record<LoanStatus, string> = {
+  loaned: 'bg-teal-50 text-teal-700',
+  returned: 'bg-gray-100 text-gray-600',
+  not_returned: 'bg-red-50 text-red-700',
+  pending_review: 'bg-amber-50 text-amber-700',
+};
+
 const STATUS_TABS: Array<{ value: LoanStatus | 'all'; label: string }> = [
   { value: 'all', label: 'כל ההשאלות' },
   { value: 'loaned', label: 'מושאל' },
@@ -16,6 +24,9 @@ const STATUS_TABS: Array<{ value: LoanStatus | 'all'; label: string }> = [
   { value: 'pending_review', label: 'בבדיקה' },
   { value: 'not_returned', label: 'לא הוחזר' },
 ];
+
+const inputClass =
+  'w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent';
 
 // Dedicated screen (not the generic EntityTable) because Loans has real logic beyond CRUD:
 // status tabs like the live system, customer/product pickers instead of free text, and an
@@ -130,22 +141,26 @@ export default function LoansScreen() {
 
   return (
     <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold">השאלות</h1>
+      <div className="flex items-center justify-between mb-5">
+        <h1 className="text-xl font-bold text-gray-900">השאלות</h1>
         {!creating && (
-          <button onClick={startCreate} className="bg-teal-600 text-white text-sm rounded px-3 py-1.5">
-            + השאלה חדשה
+          <button
+            onClick={startCreate}
+            className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
+          >
+            <Plus className="w-4 h-4" strokeWidth={2.5} />
+            השאלה חדשה
           </button>
         )}
       </div>
 
-      <div className="flex gap-2 mb-4">
+      <div className="flex flex-wrap gap-2 mb-5">
         {STATUS_TABS.map((t) => (
           <button
             key={t.value}
             onClick={() => setTab(t.value)}
-            className={`text-sm rounded-full px-3 py-1 border ${
-              tab === t.value ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600'
+            className={`text-sm font-medium rounded-full px-3.5 py-1.5 border transition-colors ${
+              tab === t.value ? 'bg-teal-600 text-white border-teal-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
             }`}
           >
             {t.label}
@@ -154,11 +169,11 @@ export default function LoansScreen() {
       </div>
 
       {creating && (
-        <div className="bg-white border rounded p-4 mb-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
             <div>
-              <label className="block text-xs text-gray-500 mb-1">לקוח</label>
-              <select className="border rounded px-2 py-1 text-sm w-full" value={newCustomerId} onChange={(e) => setNewCustomerId(e.target.value)}>
+              <label className="block text-xs font-medium text-gray-500 mb-1">לקוח</label>
+              <select className={inputClass} value={newCustomerId} onChange={(e) => setNewCustomerId(e.target.value)}>
                 <option value="">— בחר —</option>
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -168,8 +183,8 @@ export default function LoansScreen() {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">מוצר (זמינים בלבד)</label>
-              <select className="border rounded px-2 py-1 text-sm w-full" value={newProductId} onChange={(e) => setNewProductId(e.target.value)}>
+              <label className="block text-xs font-medium text-gray-500 mb-1">מוצר (זמינים בלבד)</label>
+              <select className={inputClass} value={newProductId} onChange={(e) => setNewProductId(e.target.value)}>
                 <option value="">— בחר —</option>
                 {availableProducts.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -179,20 +194,20 @@ export default function LoansScreen() {
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">תאריך השאלה</label>
-              <input type="date" className="border rounded px-2 py-1 text-sm w-full" value={newLoanDate} onChange={(e) => setNewLoanDate(e.target.value)} />
+              <label className="block text-xs font-medium text-gray-500 mb-1">תאריך השאלה</label>
+              <input type="date" className={inputClass} value={newLoanDate} onChange={(e) => setNewLoanDate(e.target.value)} />
             </div>
             <div>
-              <label className="block text-xs text-gray-500 mb-1">שם מאושפז</label>
-              <input type="text" className="border rounded px-2 py-1 text-sm w-full" value={newPatientName} onChange={(e) => setNewPatientName(e.target.value)} />
+              <label className="block text-xs font-medium text-gray-500 mb-1">שם מאושפז</label>
+              <input type="text" className={inputClass} value={newPatientName} onChange={(e) => setNewPatientName(e.target.value)} />
             </div>
           </div>
-          {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
+          {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
           <div className="flex gap-2">
-            <button onClick={submitCreate} className="bg-teal-600 text-white text-sm rounded px-3 py-1.5">
+            <button onClick={submitCreate} className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
               שמור
             </button>
-            <button onClick={() => setCreating(false)} className="text-sm text-gray-600 px-3 py-1.5">
+            <button onClick={() => setCreating(false)} className="text-sm font-medium text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100 transition-colors">
               ביטול
             </button>
           </div>
@@ -200,38 +215,56 @@ export default function LoansScreen() {
       )}
 
       {loading ? (
-        <p className="text-gray-500">טוען...</p>
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-16 bg-white rounded-2xl border border-gray-100 animate-pulse" />
+          ))}
+        </div>
       ) : visibleLoans.length === 0 ? (
-        <p className="text-gray-500">אין השאלות בקטגוריה זו.</p>
+        <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+          <Inbox className="w-10 h-10 mb-2" strokeWidth={1.5} />
+          <p className="text-sm">אין השאלות בקטגוריה זו</p>
+        </div>
       ) : (
         <div className="space-y-3">
           {visibleLoans.map((loan) => (
-            <div key={loan.id} className="bg-white border rounded p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">
-                    {productName(loan.productId)} — {customerName(loan.customerId)}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    {loan.hospitalizedPatientName && `מאושפז: ${loan.hospitalizedPatientName} · `}
-                    תאריך השאלה: {loan.loanDate}
-                    {loan.returnDate && ` · תאריך החזרה: ${loan.returnDate}`}
-                  </p>
+            <div key={loan.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="h-9 w-9 rounded-xl bg-teal-50 flex items-center justify-center shrink-0">
+                    <HandCoins className="w-4 h-4 text-teal-600" strokeWidth={2} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 truncate">
+                      {productName(loan.productId)} — {customerName(loan.customerId)}
+                    </p>
+                    <p className="text-sm text-gray-500 truncate">
+                      {loan.hospitalizedPatientName && `מאושפז: ${loan.hospitalizedPatientName} · `}
+                      תאריך השאלה: {loan.loanDate}
+                      {loan.returnDate && ` · תאריך החזרה: ${loan.returnDate}`}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs rounded-full px-2 py-1 bg-gray-100">{STATUS_LABELS[loan.status]}</span>
-                  <button onClick={() => startEdit(loan)} className="text-teal-600 text-xs">
-                    עריכה
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`text-xs font-medium rounded-full px-2.5 py-1 ${STATUS_BADGE[loan.status]}`}>
+                    {STATUS_LABELS[loan.status]}
+                  </span>
+                  <button
+                    onClick={() => startEdit(loan)}
+                    aria-label="עריכה"
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-teal-600 hover:bg-teal-50 transition-colors"
+                  >
+                    <Pencil className="w-4 h-4" strokeWidth={2} />
                   </button>
                 </div>
               </div>
 
               {editingId === loan.id && (
-                <div className="mt-3 border-t pt-3">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-3">
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">סטטוס</label>
-                      <select className="border rounded px-2 py-1 text-sm w-full" value={editStatus} onChange={(e) => setEditStatus(e.target.value as LoanStatus)}>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">סטטוס</label>
+                      <select className={inputClass} value={editStatus} onChange={(e) => setEditStatus(e.target.value as LoanStatus)}>
                         {Object.entries(STATUS_LABELS).map(([value, label]) => (
                           <option key={value} value={value}>
                             {label}
@@ -240,20 +273,20 @@ export default function LoansScreen() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">תאריך החזרה</label>
-                      <input type="date" className="border rounded px-2 py-1 text-sm w-full" value={editReturnDate} onChange={(e) => setEditReturnDate(e.target.value)} />
+                      <label className="block text-xs font-medium text-gray-500 mb-1">תאריך החזרה</label>
+                      <input type="date" className={inputClass} value={editReturnDate} onChange={(e) => setEditReturnDate(e.target.value)} />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1">הערה</label>
-                      <input type="text" className="border rounded px-2 py-1 text-sm w-full" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
+                      <label className="block text-xs font-medium text-gray-500 mb-1">הערה</label>
+                      <input type="text" className={inputClass} value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
                     </div>
                   </div>
-                  {error && <p className="text-red-600 text-sm mb-2">{error}</p>}
-                  <div className="flex gap-2 mb-3">
-                    <button onClick={() => submitEdit(loan.id)} className="bg-teal-600 text-white text-sm rounded px-3 py-1.5">
+                  {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+                  <div className="flex gap-2">
+                    <button onClick={() => submitEdit(loan.id)} className="bg-teal-600 hover:bg-teal-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors">
                       שמור
                     </button>
-                    <button onClick={() => setEditingId(null)} className="text-sm text-gray-600 px-3 py-1.5">
+                    <button onClick={() => setEditingId(null)} className="text-sm font-medium text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-100 transition-colors">
                       ביטול
                     </button>
                   </div>
@@ -262,7 +295,7 @@ export default function LoansScreen() {
 
               {/* Inline audit trail — matches the live system showing this directly in the loan edit form */}
               {logs.filter((l) => l.loanId === loan.id).length > 0 && (
-                <div className="mt-3 border-t pt-3 text-xs text-gray-500 space-y-1">
+                <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-gray-400 space-y-1">
                   {logs
                     .filter((l) => l.loanId === loan.id)
                     .map((l) => (

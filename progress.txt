@@ -464,3 +464,26 @@
   עם status=loaned ותאריך נכון, notes="מיקום: סניף מרכזי | מחלקה/חדר:
   פנימית ב, חדר 5 | משך משוער: לימים בודדים" - כל 3 השדות מהשלבים
   הנפרדים הגיעו ל-DB נכון. 0 שגיאות קונסולה.
+
+--- Iteration 16: עיצוב ממשק ניהול - השלמת אחידות ---
+בקשת המשתמש: "תעצב טיפה יותר יפה את הממשק ניהול ואתה יכול להכניס את
+כל הנתונים שקיימים בממשק הישן לפה?" (שני חלקים - זה מתעד את החלק הראשון).
+
+- EntityTable.tsx נבנה מחדש קודם (כרטיסים rounded-2xl, כפתורי אייקון
+  Pencil/Trash2 עם hover, skeleton טעינה, מצב ריק עם Inbox) - זה כיסה
+  7 מסכי קטלוג גנריים (Organizations/Branches/Warehouses/Categories/
+  Models/Products/Customers) + Payments.
+- הושלם עכשיו אותו טיפול חזותי גם למסכים הייעודיים (לא-EntityTable):
+  LoansScreen.tsx (כרטיסים במקום טבלה, status badge צבעוני לפי סטטוס,
+  audit trail מוצג בתוך הכרטיס), UsersScreen.tsx (טבלה עם avatar+badge
+  צבעוני לפי role), ActionLogsScreen.tsx (טבלה readonly עם hover).
+- DashboardView.tsx ו-Sidebar.tsx נמצאו כבר תואמים לעיצוב (rounded-2xl,
+  אייקונים, teal accents) - לא נדרש שינוי.
+- Validation: tsc --noEmit נקי, בדיקה חיה בדפדפן (login עם
+  admin@example.com/ChangeMe!Admin1) על 3 המסכים - נתונים אמיתיים
+  מוצגים נכון, 0 שגיאות קונסולה חדשות.
+- Learning: כשמבקשים "עצב יותר יפה" בלי לפרט אילו מסכים - לבדוק את כל
+  מסכי הניהול (12 ב-Sidebar), לא רק את הראשון שנתקלים בו, כדי לשמור על
+  אחידות עיצובית בכל האפליקציה.
+- הבא: חלק 2 של הבקשה - ייבוא נתונים אמיתיים מ-
+  https://ptdev1.message.co.il/admin לתוך המערכת החדשה.
