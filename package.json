@@ -9,6 +9,7 @@
     "dev:server": "tsx watch server/index.ts",
     "seed:users": "tsx server/seed-users.ts",
     "seed:demo": "tsx server/seed-demo.ts",
+    "seed:live": "tsx server/seed-live-import.ts",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
