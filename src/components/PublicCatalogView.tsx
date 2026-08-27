@@ -12,21 +12,19 @@ import {
   Star,
   ShieldCheck,
 } from 'lucide-react';
-import type { Organization, Product, Model, Loan } from '../types';
+import type { Organization, Product, Model, Branch, Loan } from '../types';
 
-// Public, no-login page addressed by the organization's token (#catalog/:token). Visual
-// design matches the AI Studio "שבת אחים" reference captured in PRD.md US-114 as closely as
-// an independent implementation reasonably can. No code or image assets were copied from
-// that reference — icons here are lucide-react (already a project dependency), chosen per
-// product name to approximate the reference's illustrations rather than one generic icon for
-// everything; terms/policy copy below is written independently, not copied from the reference.
+// Public, no-login page addressed by the organization's token (#catalog/:token).
 //
-// Full flow, matching the reference's step count (its progress bar had 6 segments, several of
-// which turned out to be: product selection → contact details → terms confirmation → payment
-// → send). Only the first two steps existed before this pass — added terms and payment after
-// user feedback that the page was missing steps. The payment step is visual only: card fields
-// are never sent to the server (no real clearing-company integration yet, see PRD.md Non-
-// Goals) — it exists so the flow isn't missing a step, not to actually process a card.
+// This went through several revision rounds against the AI Studio "שבת אחים" reference
+// (PRD.md US-114) after user feedback that earlier passes were missing whole steps. The
+// final pass actually clicked all the way through the reference's real flow (not just its
+// first screen) to get the true step order: select → terms → personal details → location →
+// date → payment → success. No code or image assets were copied from that reference —
+// copy/labels below are written independently; icons are lucide-react (already a project
+// dependency); the "location" step uses the organization's real Branch records instead of
+// the reference's hardcoded hospital-wing list, since this platform serves organizations
+// generally, not one specific hospital.
 
 const TEAL = '#0d9488'; // tailwind teal-600, matches the reference's accent color closely
 
@@ -38,14 +36,33 @@ function pickIcon(name: string) {
   return Package;
 }
 
+type DurationEstimate = 'unknown' | 'few_days' | 'one_day';
+const DURATION_LABELS: Record<DurationEstimate, string> = {
+  unknown: 'לא ידוע',
+  few_days: 'לימים בודדים',
+  one_day: 'ליום אחד',
+};
+
 interface CatalogData {
   organization: Organization;
   products: Array<Product & { model?: Model }>;
+  branches: Branch[];
 }
 
-type Step = 'select' | 'details' | 'terms' | 'payment' | 'success';
-const STEPS = 6;
-const STEP_INDEX: Record<Step, number> = { select: 0, details: 1, terms: 2, payment: 3, success: 4 };
+type Step = 'select' | 'terms' | 'details' | 'location' | 'date' | 'payment' | 'success';
+const STEPS = 6; // 'success' isn't a numbered step — it's the result once all 6 are done
+const STEP_INDEX: Record<Exclude<Step, 'success'>, number> = {
+  select: 0,
+  terms: 1,
+  details: 2,
+  location: 3,
+  date: 4,
+  payment: 5,
+};
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export default function PublicCatalogView({ token }: { token: string }) {
   const [data, setData] = useState<CatalogData | null>(null);
@@ -53,11 +70,19 @@ export default function PublicCatalogView({ token }: { token: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [step, setStep] = useState<Step>('select');
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [patientName, setPatientName] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
+
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [extraPhone, setExtraPhone] = useState('');
+  const [patientName, setPatientName] = useState('');
+
+  const [branchId, setBranchId] = useState('');
+  const [roomInfo, setRoomInfo] = useState('');
+
+  const [loanDate, setLoanDate] = useState(todayISO());
+  const [duration, setDuration] = useState<DurationEstimate | null>(null);
+
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmedCount, setConfirmedCount] = useState(0);
@@ -72,16 +97,22 @@ export default function PublicCatalogView({ token }: { token: string }) {
       }
       const { organization } = (await orgRes.json()) as { organization: Organization };
 
-      const [productsRes, modelsRes] = await Promise.all([fetch('/api/products'), fetch('/api/models')]);
+      const [productsRes, modelsRes, branchesRes] = await Promise.all([
+        fetch('/api/products'),
+        fetch('/api/models'),
+        fetch('/api/branches'),
+      ]);
       const { items: allProducts } = (await productsRes.json()) as { items: Product[] };
       const { items: allModels } = (await modelsRes.json()) as { items: Model[] };
+      const { items: allBranches } = (await branchesRes.json()) as { items: Branch[] };
       const modelsById = new Map(allModels.map((m) => [m.id, m]));
 
       const products = allProducts
         .filter((p) => p.organizationId === organization.id && p.loanStatus === 'not_loaned')
         .map((p) => ({ ...p, model: modelsById.get(p.modelId) }));
+      const branches = allBranches.filter((b) => b.organizationId === organization.id);
 
-      if (!cancelled) setData({ organization, products });
+      if (!cancelled) setData({ organization, products, branches });
     }
     load();
     return () => {
@@ -103,6 +134,15 @@ export default function PublicCatalogView({ token }: { token: string }) {
     setSubmitError(null);
     setSubmitting(true);
     try {
+      const [firstName, ...rest] = fullName.trim().split(/\s+/);
+      const lastName = rest.join(' ') || firstName;
+      const branchName = data?.branches.find((b) => b.id === branchId)?.name;
+      const noteParts = [
+        branchName && `מיקום: ${branchName}`,
+        roomInfo && `מחלקה/חדר: ${roomInfo}`,
+        duration && `משך משוער: ${DURATION_LABELS[duration]}`,
+      ].filter(Boolean);
+
       const res = await fetch('/api/public/loan-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -113,6 +153,8 @@ export default function PublicCatalogView({ token }: { token: string }) {
           lastName,
           phone,
           hospitalizedPatientName: patientName || undefined,
+          loanDate,
+          notes: noteParts.length > 0 ? noteParts.join(' | ') : undefined,
         }),
       });
       const responseData = (await res.json()) as { loans?: Loan[]; error?: string };
@@ -143,13 +185,46 @@ export default function PublicCatalogView({ token }: { token: string }) {
     );
   }
 
-  const { organization, products } = data;
+  const { organization, products, branches } = data;
   const selectedProducts = products.filter((p) => selected.has(p.id));
-  const totalDeposit = selectedProducts.reduce((sum, p) => sum + (p.model?.price ?? 0), 0);
-  // DOM-first child renders on the right under RTL, matching the reference's active segment
-  // sitting at the right (start-of-reading) side of the bar — active segment advances left as
-  // the customer moves through steps.
-  const ACTIVE_STEP = STEP_INDEX[step];
+  const ACTIVE_STEP = step === 'success' ? STEPS - 1 : STEP_INDEX[step];
+
+  function ContinueBar({
+    onNext,
+    onBack,
+    nextDisabled,
+    nextLabel = 'המשך לשלב הבא',
+    type = 'button',
+  }: {
+    onNext?: () => void;
+    onBack: () => void;
+    nextDisabled?: boolean;
+    nextLabel?: string;
+    type?: 'button' | 'submit';
+  }) {
+    return (
+      <div className="flex gap-3 mt-8">
+        <button
+          type={type}
+          onClick={onNext}
+          disabled={nextDisabled}
+          className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-white transition-colors disabled:cursor-not-allowed"
+          style={{ backgroundColor: nextDisabled ? '#d1d5db' : TEAL }}
+        >
+          <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
+          {nextLabel}
+        </button>
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center justify-center gap-2 rounded-2xl py-4 px-5 font-semibold text-gray-600 border border-gray-200 bg-white"
+        >
+          <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
+          חזרה
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -200,10 +275,9 @@ export default function PublicCatalogView({ token }: { token: string }) {
                   return (
                     // A plain div with onClick, not a <label>+hidden-checkbox — the sr-only
                     // input relied on native label-click forwarding to toggle, which didn't
-                    // fire reliably (reported as "buttons don't work"; reproduced directly:
-                    // a real click on the visible circle left the underlying checkbox
-                    // unchecked). role="checkbox" + aria-checked + keyboard handling keep it
-                    // accessible without depending on that forwarding behavior.
+                    // fire reliably (reported as "buttons don't work"). role="checkbox" +
+                    // aria-checked + keyboard handling keep it accessible without depending
+                    // on that forwarding behavior.
                     <div
                       key={p.id}
                       role="checkbox"
@@ -259,7 +333,7 @@ export default function PublicCatalogView({ token }: { token: string }) {
               <button
                 type="button"
                 disabled={selected.size === 0}
-                onClick={() => setStep('details')}
+                onClick={() => setStep('terms')}
                 className="w-full flex items-center justify-center gap-2 rounded-2xl py-4 mt-8 font-semibold text-white transition-colors disabled:cursor-not-allowed"
                 style={{ backgroundColor: selected.size > 0 ? TEAL : '#d1d5db' }}
               >
@@ -270,104 +344,22 @@ export default function PublicCatalogView({ token }: { token: string }) {
           </>
         )}
 
-        {step === 'details' && (
-          <>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">פרטים ליצירת קשר</h1>
-            <p className="text-gray-400 mb-3">נדרש כדי להשלים את בקשת ההשאלה</p>
-            <div className="h-1 w-10 rounded-full mb-8" style={{ backgroundColor: TEAL }} />
-
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-6">
-              <p className="text-sm font-medium text-gray-500 mb-2">מוצרים שנבחרו</p>
-              <ul className="text-sm text-gray-700 space-y-1">
-                {selectedProducts.map((p) => (
-                  <li key={p.id}>{p.model?.name ?? p.name}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">שם פרטי</label>
-                  <input
-                    type="text"
-                    required
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">שם משפחה</label>
-                  <input
-                    type="text"
-                    required
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">טלפון נייד</label>
-                <input
-                  type="tel"
-                  required
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">שם מאושפז (אופציונלי)</label>
-                <input
-                  type="text"
-                  value={patientName}
-                  onChange={(e) => setPatientName(e.target.value)}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-8">
-              <button
-                type="button"
-                disabled={!firstName || !lastName || !phone}
-                onClick={() => setStep('terms')}
-                className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-white transition-colors disabled:cursor-not-allowed"
-                style={{ backgroundColor: firstName && lastName && phone ? TEAL : '#d1d5db' }}
-              >
-                <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
-                המשך לשלב הבא
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep('select')}
-                className="flex items-center justify-center gap-2 rounded-2xl py-4 px-5 font-semibold text-gray-600 border border-gray-200 bg-white"
-              >
-                <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
-                חזרה
-              </button>
-            </div>
-          </>
-        )}
-
         {step === 'terms' && (
           <>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">תנאי השימוש וההשאלה</h1>
-            <p className="text-gray-400 mb-3">נא לקרוא ולאשר לפני המשך</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">מידע על השאלת הציוד</h1>
+            <p className="text-gray-400 mb-3">חשוב לקרוא ולאשר לפני שנמשיך</p>
             <div className="h-1 w-10 rounded-full mb-8" style={{ backgroundColor: TEAL }} />
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4" style={{ color: TEAL }}>
                 <ShieldCheck className="w-5 h-5" strokeWidth={2} />
-                <p className="font-semibold">הציוד שברשותכם ניתן לכם בהשאלה על ידי {organization.name}</p>
+                <p className="font-semibold">הציוד שאתם מקבלים ניתן לכם באהבה רבה על ידי {organization.name}</p>
               </div>
               <ul className="text-gray-600 text-sm space-y-2 list-disc pr-5">
-                <li>הציוד מיועד לשימוש האדם עבורו הוזמן בלבד.</li>
-                <li>יש לשמור על ניקיון הציוד ותקינותו במהלך תקופת ההשאלה.</li>
-                <li>בתום השימוש, יש להחזיר את הציוד למחסן או לתאם איסוף.</li>
-                <li>סכום הפיקדון יוחזר במלואו לאחר החזרת הציוד במצב תקין.</li>
+                <li>הציוד מיועד לשימוש במקום שלשמו נשאל בלבד.</li>
+                <li>יש לשמור על ניקיון הציוד ושלמותו.</li>
+                <li>בתום השימוש, יש להחזיר את הציוד לנקודת האיסוף שהוצאה מראש.</li>
+                <li>הפיקדון יוחזר במלואו לאחר החזרת הציוד במצב תקין.</li>
               </ul>
 
               <label className="flex items-center gap-3 mt-6 pt-4 border-t border-gray-100 cursor-pointer">
@@ -381,33 +373,168 @@ export default function PublicCatalogView({ token }: { token: string }) {
               </label>
             </div>
 
-            <div className="flex gap-3 mt-8">
-              <button
-                type="button"
-                disabled={!termsAccepted}
-                onClick={() => setStep('payment')}
-                className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-white transition-colors disabled:cursor-not-allowed"
-                style={{ backgroundColor: termsAccepted ? TEAL : '#d1d5db' }}
-              >
-                <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
-                המשך לשלב הבא
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep('details')}
-                className="flex items-center justify-center gap-2 rounded-2xl py-4 px-5 font-semibold text-gray-600 border border-gray-200 bg-white"
-              >
-                <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
-                חזרה
-              </button>
+            <ContinueBar onNext={() => setStep('details')} onBack={() => setStep('select')} nextDisabled={!termsAccepted} />
+          </>
+        )}
+
+        {step === 'details' && (
+          <>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">פרטים אישיים</h1>
+            <p className="text-gray-400 mb-3">נא למלא את פרטי הקשר של השואל</p>
+            <div className="h-1 w-10 rounded-full mb-8" style={{ backgroundColor: TEAL }} />
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">שם מלא</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="ישראל ישראלי"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">טלפון נייד</label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="05X-XXXXXXX"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">טלפון נוסף (לא חובה)</label>
+                <input
+                  type="tel"
+                  placeholder="05X-XXXXXXX"
+                  value={extraPhone}
+                  onChange={(e) => setExtraPhone(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">שם המאושפז (אופציונלי, אם שונה מהשואל)</label>
+                <input
+                  type="text"
+                  value={patientName}
+                  onChange={(e) => setPatientName(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+              <p className="text-xs text-gray-400 text-center pt-2 border-t border-gray-100">
+                פרטיכם נשמרים במערכת לטובת ניהול ההשאלה בלבד. אין צורך בתעודת זהות או כתובת מייל.
+              </p>
             </div>
+
+            <ContinueBar
+              onNext={() => setStep('location')}
+              onBack={() => setStep('terms')}
+              nextDisabled={!fullName || !phone}
+            />
+          </>
+        )}
+
+        {step === 'location' && (
+          <>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">מה מיקום הציוד?</h1>
+            <p className="text-gray-400 mb-3">נא לספק מיקום מדויק</p>
+            <div className="h-1 w-10 rounded-full mb-8" style={{ backgroundColor: TEAL }} />
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">בחר סניף / אזור</label>
+                {branches.length === 0 ? (
+                  <p className="text-sm text-gray-400">אין סניפים מוגדרים לארגון זה.</p>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {branches.map((b) => (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => setBranchId(b.id)}
+                        className="rounded-xl py-3 px-3 text-sm font-medium border-2 transition-colors"
+                        style={{
+                          borderColor: branchId === b.id ? TEAL : '#e5e7eb',
+                          color: branchId === b.id ? TEAL : '#374151',
+                          backgroundColor: branchId === b.id ? '#f0fdfa' : 'white',
+                        }}
+                      >
+                        {b.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">שם המחלקה ומספר החדר</label>
+                <input
+                  type="text"
+                  placeholder="נא לציין את שם המחלקה ומספר החדר (לדוגמה: פנימית ב', חדר 12)"
+                  value={roomInfo}
+                  onChange={(e) => setRoomInfo(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+            </div>
+
+            <ContinueBar onNext={() => setStep('date')} onBack={() => setStep('details')} />
+          </>
+        )}
+
+        {step === 'date' && (
+          <>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">למתי אתה צריך את הציוד?</h1>
+            <p className="text-gray-400 mb-3">תאריך השאלה מבוקש (ברירת מחדל להיום)</p>
+            <div className="h-1 w-10 rounded-full mb-8" style={{ backgroundColor: TEAL }} />
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">תאריך השאלה</label>
+                <input
+                  type="date"
+                  value={loanDate}
+                  onChange={(e) => setLoanDate(e.target.value)}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  לכמה זמן להערכתך תצטרך את הציוד? (לא חובה)
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {(Object.keys(DURATION_LABELS) as DurationEstimate[]).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setDuration(duration === d ? null : d)}
+                      className="rounded-xl py-3 px-2 text-sm font-medium border-2 transition-colors"
+                      style={{
+                        borderColor: duration === d ? TEAL : '#e5e7eb',
+                        color: duration === d ? TEAL : '#374151',
+                        backgroundColor: duration === d ? '#f0fdfa' : 'white',
+                      }}
+                    >
+                      {DURATION_LABELS[d]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <ContinueBar onNext={() => setStep('payment')} onBack={() => setStep('location')} nextDisabled={!loanDate} />
           </>
         )}
 
         {step === 'payment' && (
           <form onSubmit={submitRequest}>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">פרטי פיקדון</h1>
-            <p className="text-gray-400 mb-3">סה"כ פיקדון לשמירה: {totalDeposit}₪</p>
+            <p className="text-gray-400 mb-3">
+              סה"כ פיקדון לשמירה: {selectedProducts.reduce((sum, p) => sum + (p.model?.price ?? 0), 0)}₪
+            </p>
             <div className="h-1 w-10 rounded-full mb-8" style={{ backgroundColor: TEAL }} />
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
@@ -446,37 +573,38 @@ export default function PublicCatalogView({ token }: { token: string }) {
 
             {submitError && <p className="text-red-600 text-sm mt-3">{submitError}</p>}
 
-            <div className="flex gap-3 mt-8">
-              <button
-                type="submit"
-                disabled={submitting}
-                className="flex-1 flex items-center justify-center gap-2 rounded-2xl py-4 font-semibold text-white transition-colors disabled:opacity-50"
-                style={{ backgroundColor: TEAL }}
-              >
-                <ChevronLeft className="w-5 h-5" strokeWidth={2.5} />
-                {submitting ? 'שולח...' : 'שלח בקשה להשאלה'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep('terms')}
-                className="flex items-center justify-center gap-2 rounded-2xl py-4 px-5 font-semibold text-gray-600 border border-gray-200 bg-white"
-              >
-                <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
-                חזרה
-              </button>
-            </div>
+            <ContinueBar
+              type="submit"
+              onNext={undefined}
+              onBack={() => setStep('date')}
+              nextDisabled={submitting}
+              nextLabel={submitting ? 'שולח...' : 'שלח בקשה להשאלה'}
+            />
           </form>
         )}
 
         {step === 'success' && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-10 text-center">
-            <CheckCircle2 className="w-14 h-14 mx-auto mb-4" style={{ color: TEAL }} strokeWidth={1.5} />
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">הבקשה נשלחה בהצלחה</h1>
-            <p className="text-gray-500">
-              {confirmedCount === selectedProducts.length
-                ? `נרשמה השאלה עבור ${confirmedCount} מוצרים.`
-                : `נרשמה השאלה עבור ${confirmedCount} מתוך ${selectedProducts.length} מוצרים שנבחרו — חלק כבר לא היו זמינים.`}
+            <div className="w-20 h-20 rounded-full mx-auto mb-5 flex items-center justify-center" style={{ backgroundColor: '#f0fdfa' }}>
+              <CheckCircle2 className="w-11 h-11" style={{ color: TEAL }} strokeWidth={1.5} />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-3">בקשת ההשאלה נשלחה!</h1>
+            <p className="text-gray-500 mb-6">
+              תודה רבה {fullName || ''}. בקשתך התקבלה בהצלחה במערכת {organization.name}.
+              {confirmedCount < selectedProducts.length &&
+                ` (${confirmedCount} מתוך ${selectedProducts.length} מוצרים נרשמו — חלק כבר לא היו זמינים.)`}
             </p>
+            <div className="bg-gray-50 rounded-xl p-5">
+              <p className="text-sm text-gray-700 mb-2">ברגעים הקרובים יצור עמכם קשר נציג הארגון לתיאום ההשאלה.</p>
+              {phone && (
+                <>
+                  <p className="text-xs text-gray-400">נציג יתקשר למספר:</p>
+                  <p className="font-bold text-lg" style={{ color: TEAL }}>
+                    {phone}
+                  </p>
+                </>
+              )}
+            </div>
           </div>
         )}
 

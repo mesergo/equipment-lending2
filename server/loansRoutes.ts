@@ -142,7 +142,7 @@ loansRouter.patch('/loans/:id', requireAuth, async (req: AuthedRequest, res: Res
 // submit (race with another customer, or staff) are silently skipped rather than failing the
 // whole request — the response tells the caller which ones actually went through.
 loansRouter.post('/public/loan-requests', async (req, res) => {
-  const { token, productIds, firstName, lastName, phone, hospitalizedPatientName } = req.body || {};
+  const { token, productIds, firstName, lastName, phone, hospitalizedPatientName, loanDate, notes } = req.body || {};
 
   if (
     !token ||
@@ -179,6 +179,7 @@ loansRouter.post('/public/loan-requests', async (req, res) => {
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  const requestedLoanDate = loanDate ? String(loanDate) : today;
   const createdLoans: Loan[] = [];
 
   for (const productId of productIds) {
@@ -193,7 +194,8 @@ loansRouter.post('/public/loan-requests', async (req, res) => {
       customerId: customer.id,
       hospitalizedPatientName: hospitalizedPatientName ? String(hospitalizedPatientName) : undefined,
       productId: product.id,
-      loanDate: today,
+      loanDate: requestedLoanDate,
+      notes: notes ? String(notes) : undefined,
     };
     const created = await loansStore.create(loan);
     await productsStore.update(product.id, { loanStatus: 'loaned' });
