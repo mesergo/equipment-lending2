@@ -11,8 +11,10 @@
     "seed:demo": "tsx server/seed-demo.ts",
     "seed:live": "tsx server/seed-live-import.ts",
     "build": "vite build",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:all": "npm run build && npm run build:server",
     "preview": "vite preview",
-    "clean": "rm -rf dist",
+    "clean": "rm -rf dist server-build",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
