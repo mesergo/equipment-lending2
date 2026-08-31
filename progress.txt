@@ -567,4 +567,67 @@ https://ptdev1.message.co.il/admin לתוך המערכת החדשה.
 - Learning: כש-.env הוא gitignored, אין safety net של git history אם
   מישהו/משהו דורס אותו בטעות - שווה לשקול תזכורת תקופתית להשוואת .env
   מול .env.example כדי לתפוס דריפט כזה מוקדם, לא רק כשמשהו כבר שבור.
+- **תיקון להערה למעלה:** ההנחה הזו התבררה כהפוכה! מסד "questions" הוא
+  בעצם ה-DB **האמיתי** (מיגרציה גולמית של המערכת הישנה - ראו Iteration
+  19), וה-Atlas cluster הוא הסקאפולד/דמו הישן שלנו. שוחזר בחזרה
+  ל-questions אחרי שהמשתמש אישר זאת. **לקח אמיתי:** כש-.env גיטיגנור
+  ונראה "שגוי" ביחס למה שאתה מצפה, לשאול לפני שמתקנים - לא להניח
+  שהערך המוכר-לי הוא הנכון.
 
+--- Iteration 19: ייבוא הקוד לקרוא מה-collections האמיתיים ---
+בזמן שנתקלתי במגבלת שימוש, סבב עבודה נוסף (Claude, אותה שיחה) שינה
+משמעותית את הגישה: server/catalogRoutes.ts, genericStore.ts, store.ts,
+loansRoutes.ts שוכתבו לקרוא ישירות מה-collections הגולמיים של המערכת
+הישנה (equipment_warehouses/product_models/lendings/users עם שדות
+snake_case ו-id מספרי), במקום מה-collections שאני יצרתי (warehouses/
+models/loans). גם נוסף: העלאת תמונות (org logo, model photo), ובחירת
+ארגון לסדרן/super_admin ביצירת ישויות/משתמשים. ראו התיעוד המלא בראש
+server/catalogRoutes.ts.
+
+--- Iteration 20: השוואה לממשק האמיתי + שדות חסרים + מרכז התראות ---
+המשתמש ביקש לעבור על https://ptdev1.message.co.il/admin ולזהות פערים.
+עברתי על כל 10 טופסי היצירה + הדשבורד (לא על הקטלוג הציבורי - התבקשתי
+במפורש לא להתמקד שם). ממצאים עיקריים ותיקונים:
+
+- Warehouse: היה חסר branchId (יחס אמיתי לסניף - equipment_warehouses.
+  branch_id), notes, stockQuantity (stock_quantity, נפרד מ-capacity).
+  נוסף ל-types + catalogRoutes.ts (toWarehouse) + CatalogScreens.tsx
+  (select סניפים + שדות חדשים).
+- Product: היה חסר purchaseDate (purchase_date, שדה חובה במערכת
+  האמיתית), notes, dedication ("הקדשה" - שדה זיכרון/הקדשה אמיתי
+  שהתגלה בסריקת מסמך גולמי). ProductStatus הורחב לערך שלישי
+  ("הוחזר, ממתין לאישור נציג" - returned_pending_review).
+- Customer: היה חסר email (שדה חובה במערכת האמיתית!) ו-additionalPhone
+  (additional_telephone).
+- Payment: **תקלה אמיתית** - paymentsStore לא עבר את המעבר ל-legacy
+  collections ב-Iteration 19 בכלל! עדיין השתמש ב-createMongoStore רגיל
+  בלי מיפוי שמות שדות, כך שכל השדות (chargeAmount/clearingCompanyId
+  וכו') חזרו undefined בפועל מול הנתונים האמיתיים. שוכתב עם toPayment()
+  לפי אותה תבנית כמו שאר הקבצים (wrapLegacyStore יוצא עכשיו מ-
+  catalogRoutes.ts לשימוש חוזר). נוספו amount, isCashPayment.
+- EntityTable.tsx: נוסף FieldType חדש 'date' (input type=date).
+- **פיצ'ר חדש: מרכז התראות** - server/notificationsRoutes.ts +
+  src/components/NotificationBell.tsx (פעמון בראש ה-Sidebar, badge
+  ספירה, mark-read/mark-all-read/clear, polling כל 30 שניות). notify()
+  נקרא מ-loansRoutes.ts בשלוש נקודות: יצירת השאלה (מאומתת+ציבורית)
+  והחזרת מוצר.
+- **תקלה אמיתית שנתפסה בבדיקה (חשוב!):** מרכז ההתראות תוכנן במקור
+  לכתוב ל-collection בשם 'notifications' - אבל זה בדיוק השם של טבלת
+  ה-notifications ה**אמיתית** של Laravel/Filament במערכת המקור (per-
+  admin-user, JSON-encoded `data`, UUID ids, `created_at`/`read_at`)!
+  זוהה מיד כשה-UI הציג "Invalid Date" על כל הפריטים - בדיקה ישירה מול
+  ה-DB אישרה 14 מסמכי Laravel אמיתיים (לא נתונים שלי - עדיין לא נכתב
+  שום דבר דרך ה-API כי אף השאלה לא נוצרה/הוחזרה עדיין דרך השרת
+  המקומי). שונה ל-collection נפרד `app_notifications`. **Learning:**
+  כשקוראים ממסד legacy אמיתי, כל שם collection חדש שרוצים ליצור צריך
+  להיבדק קודם שהוא לא מתנגש עם טבלה אמיתית קיימת - "notifications",
+  "logs", "settings" וכו' הם שמות נפוצים שקל להתנגש בהם בטעות.
+- Validation: tsc --noEmit נקי; אימות מלא בדפדפן (המשתמש התחבר בעצמו
+  עם batsi1606@gmail.com לאחר restart של השרת) - כל 4 המסכים (מחסנים/
+  מוצרים/לקוחות/תשלומים) מציגים את השדות החדשים נכון מול נתונים
+  אמיתיים; מרכז ההתראות מציג "אין התראות" בלי שגיאות אחרי התיקון.
+- תקלה נוספת שנתקלנו בה תוך כדי: EADDRINUSE חוזר על 4001 - תהליך ישן
+  ממושב קודם עדיין תפס את הפורט, גרם ל-tsx watch להתרסק בלולאה על כל
+  שינוי בקובץ server במשך כמה דקות עד שהתהליך הישן סוף-סוף נסגר.
+  אותו לקח כמו קודם: לבדוק netstat לפני restart, לא רק אחרי שרואים
+  שגיאה.
