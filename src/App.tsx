@@ -17,6 +17,7 @@ import LoansScreen from './components/LoansScreen';
 import ActionLogsScreen from './components/ActionLogsScreen';
 import UsersScreen from './components/UsersScreen';
 import PublicCatalogView from './components/PublicCatalogView';
+import PublicReturnView from './components/PublicReturnView';
 
 function useHashRoute(): string {
   const [hash, setHash] = useState(() => window.location.hash.slice(1) || 'dashboard');
@@ -93,6 +94,10 @@ export default function App() {
   if (route.startsWith('catalog/')) {
     const token = route.slice('catalog/'.length);
     return <PublicCatalogView token={token} />;
+  }
+  if (route.startsWith('return/')) {
+    const token = route.slice('return/'.length);
+    return <PublicReturnView token={token} />;
   }
 
   return (

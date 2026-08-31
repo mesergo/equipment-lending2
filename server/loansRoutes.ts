@@ -224,6 +224,98 @@ loansRouter.post('/public/loan-requests', async (req, res) => {
   res.status(201).json({ loans: createdLoans, customer, skipped: productIds.length - createdLoans.length });
 });
 
+// Self-service return flow (public, no login), matching the live system's "החזרת ציוד" page:
+// a customer enters their phone, sees what's currently out on loan, and picks what they're
+// returning. Org-scoped by token like the rest of the public flow, so a phone number that
+// exists in two different organizations can't cross over.
+loansRouter.get('/public/customer-loans', async (req, res) => {
+  const token = String(req.query.token || '');
+  const phone = String(req.query.phone || '').replace(/\D/g, '');
+  if (!token || !phone) {
+    res.status(400).json({ error: 'חסר ארגון או מספר טלפון' });
+    return;
+  }
+
+  const organizations = await organizationsStore.readAll();
+  const organization = organizations.find((o) => o.token === token);
+  if (!organization) {
+    res.status(404).json({ error: 'ארגון לא נמצא' });
+    return;
+  }
+
+  const customers = await customersStore.readAll();
+  const customer = customers.find(
+    (c) => c.organizationId === organization.id && c.mobilePhone.replace(/\D/g, '') === phone
+  );
+  if (!customer) {
+    res.json({ loans: [] });
+    return;
+  }
+
+  const [allLoans, allProducts] = await Promise.all([loansStore.readAll(), productsStore.readAll()]);
+  const productsById = new Map(allProducts.map((p) => [p.id, p]));
+  const openLoans = allLoans
+    .filter((l) => l.customerId === customer.id && (l.status === 'loaned' || l.status === 'not_returned'))
+    .map((l) => ({ id: l.id, productName: productsById.get(l.productId)?.name ?? l.productId, loanDate: l.loanDate }));
+
+  res.json({ loans: openLoans });
+});
+
+loansRouter.post('/public/loan-returns', async (req, res) => {
+  const { token, phone, loanIds } = req.body || {};
+  if (!token || !phone || !Array.isArray(loanIds) || loanIds.length === 0) {
+    res.status(400).json({ error: 'חסרים שדות נדרשים' });
+    return;
+  }
+
+  const organizations = await organizationsStore.readAll();
+  const organization = organizations.find((o) => o.token === token);
+  if (!organization) {
+    res.status(404).json({ error: 'ארגון לא נמצא' });
+    return;
+  }
+
+  const normalizedPhone = String(phone).replace(/\D/g, '');
+  const customers = await customersStore.readAll();
+  const customer = customers.find(
+    (c) => c.organizationId === organization.id && c.mobilePhone.replace(/\D/g, '') === normalizedPhone
+  );
+  if (!customer) {
+    res.status(404).json({ error: 'לקוח לא נמצא' });
+    return;
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  let returnedCount = 0;
+
+  for (const loanId of loanIds) {
+    const loan = await loansStore.find(String(loanId));
+    // Only ever act on a loan that's actually this customer's and still open — never trust
+    // the id alone, since this endpoint has no auth to fall back on.
+    if (!loan || loan.customerId !== customer.id || loan.organizationId !== organization.id) continue;
+    if (loan.status !== 'loaned' && loan.status !== 'not_returned') continue;
+
+    await loansStore.update(loan.id, { status: 'returned', returnDate: today });
+    const product = await productsStore.find(loan.productId);
+    if (product) await productsStore.update(product.id, { loanStatus: 'not_loaned' });
+    await logAction(
+      organization.id,
+      `${customer.firstName} ${customer.lastName} (החזרה עצמאית)`,
+      loan.id,
+      `בקשת החזרה עצמאית התקבלה עבור ${product?.name ?? loan.productId}`
+    );
+    await notify(organization.id, 'החזרה הושלמה בהצלחה', `${customer.firstName} ${customer.lastName} החזיר/ה את ${product?.name ?? ''}`, loan.id);
+    returnedCount++;
+  }
+
+  if (returnedCount === 0) {
+    res.status(409).json({ error: 'לא נמצאו השאלות פתוחות תואמות להחזרה' });
+    return;
+  }
+
+  res.json({ returned: returnedCount });
+});
+
 // ActionLog is written only internally (above); this is the read-only endpoint for the
 // admin "לוגי פעולות" screen (US-109/US-111). Newest first, org-scoped.
 loansRouter.get('/action-logs', requireAuth, async (req: AuthedRequest, res: Response) => {
