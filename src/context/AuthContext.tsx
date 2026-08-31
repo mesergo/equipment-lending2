@@ -82,10 +82,13 @@ export function useAuthedFetch() {
   const { token, logout } = useAuth();
   return useCallback(
     async (url: string, options: RequestInit = {}) => {
+      // FormData (file uploads) must NOT get a manual Content-Type — the browser sets its own
+      // multipart boundary automatically, and overriding it here would break the upload.
+      const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
       const res = await fetch(url, {
         ...options,
         headers: {
-          ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+          ...(options.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...options.headers,
         },

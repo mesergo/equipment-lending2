@@ -15,10 +15,15 @@ import { catalogRouter } from './catalogRoutes';
 import { loansRouter } from './loansRoutes';
 import { paymentsRouter } from './paymentsRoutes';
 import { usersRouter } from './usersRoutes';
+import { uploadRouter, UPLOADS_DIR } from './uploadRoutes';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+// Uploaded images (organization logos, model photos) — registered before the SPA catch-all
+// below so /uploads/<file> requests are served directly instead of falling through to
+// index.html.
+app.use('/uploads', express.static(UPLOADS_DIR));
 // Every /api response is dynamic data (catalog availability, loan status, etc.) — without
 // this, browsers can serve a stale cached GET response after a PATCH changes the underlying
 // record (observed directly: a model's price updated via PATCH, confirmed updated by a fresh
@@ -32,6 +37,7 @@ app.use('/api', catalogRouter);
 app.use('/api', loansRouter);
 app.use('/api', paymentsRouter);
 app.use('/api', usersRouter);
+app.use('/api', uploadRouter);
 
 function toPublicUser(user: Awaited<ReturnType<typeof findUserByEmail>>) {
   if (!user) return null;

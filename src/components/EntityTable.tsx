@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Inbox } from 'lucide-react';
+import { Plus, Pencil, Trash2, Inbox, Upload } from 'lucide-react';
 import { useAuthedFetch } from '../context/AuthContext';
 
-export type FieldType = 'text' | 'number' | 'select' | 'boolean';
+export type FieldType = 'text' | 'number' | 'select' | 'boolean' | 'image';
 
 export interface FieldConfig<T> {
   key: keyof T & string;
@@ -10,6 +10,10 @@ export interface FieldConfig<T> {
   type?: FieldType;
   options?: Array<{ value: string; label: string }>;
   required?: boolean;
+  // Only shown on the create form, not on edit — for fields the backend accepts on create but
+  // silently ignores on PATCH (e.g. organizationId, which every entity treats as immutable
+  // once set), so editing it in the UI would be misleading.
+  createOnly?: boolean;
 }
 
 interface EntityTableProps<T extends { id: string }> {
@@ -33,6 +37,7 @@ export default function EntityTable<T extends { id: string }>({ title, apiPath, 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [creating, setCreating] = useState(false);
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -110,7 +115,51 @@ export default function EntityTable<T extends { id: string }>({ title, apiPath, 
     await load();
   }
 
+  async function handleImageUpload(key: string, file: File) {
+    setUploadingKey(key);
+    setError(null);
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const res = await authedFetch('/api/uploads/image', { method: 'POST', body });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'העלאת התמונה נכשלה');
+        return;
+      }
+      setFormValues((prev) => ({ ...prev, [key]: data.url }));
+    } finally {
+      setUploadingKey(null);
+    }
+  }
+
   function renderField(f: FieldConfig<T>) {
+    if (f.type === 'image') {
+      const value = formValues[f.key] ?? '';
+      return (
+        <div className="flex items-center gap-3">
+          {value ? (
+            <img src={value} alt="" className="h-12 w-12 rounded-lg object-cover border border-gray-200 shrink-0" />
+          ) : (
+            <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+              <Upload className="w-4 h-4 text-gray-400" strokeWidth={1.5} />
+            </div>
+          )}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            disabled={uploadingKey === f.key}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleImageUpload(f.key, file);
+              e.target.value = '';
+            }}
+            className="text-xs text-gray-500 file:ml-2 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-200"
+          />
+          {uploadingKey === f.key && <span className="text-xs text-gray-400">מעלה...</span>}
+        </div>
+      );
+    }
     if (f.type === 'select' || f.type === 'boolean') {
       const options = f.type === 'boolean' ? [{ value: 'true', label: 'כן' }, { value: 'false', label: 'לא' }] : f.options;
       return (
@@ -157,7 +206,7 @@ export default function EntityTable<T extends { id: string }>({ title, apiPath, 
       {(creating || editingId) && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-5">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
-            {fields.map((f) => (
+            {fields.filter((f) => creating || !f.createOnly).map((f) => (
               <div key={f.key}>
                 <label className="block text-xs font-medium text-gray-500 mb-1">{f.label}</label>
                 {renderField(f)}
@@ -209,13 +258,19 @@ export default function EntityTable<T extends { id: string }>({ title, apiPath, 
                   <tr key={item.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
                     {fields.map((f) => (
                       <td key={f.key} className="px-4 py-3 text-gray-700">
-                        {f.type === 'select'
-                          ? f.options?.find((o) => o.value === item[f.key])?.label ?? String(item[f.key] ?? '')
-                          : f.type === 'boolean'
-                            ? item[f.key]
-                              ? 'כן'
-                              : 'לא'
-                            : String(item[f.key] ?? '')}
+                        {f.type === 'image' ? (
+                          item[f.key] ? (
+                            <img src={String(item[f.key])} alt="" className="h-8 w-8 rounded-lg object-cover border border-gray-200" />
+                          ) : (
+                            <span className="text-gray-300">—</span>
+                          )
+                        ) : f.type === 'select' ? (
+                          (f.options?.find((o) => o.value === item[f.key])?.label ?? String(item[f.key] ?? ''))
+                        ) : f.type === 'boolean' ? (
+                          item[f.key] ? 'כן' : 'לא'
+                        ) : (
+                          String(item[f.key] ?? '')
+                        )}
                       </td>
                     ))}
                     <td className="px-4 py-3 text-left whitespace-nowrap">

@@ -11,5 +11,8 @@ coverage/
 # Local auth server data (seeded user accounts with hashed passwords) — never commit real credentials
 server/data/
 
+# User-uploaded images (organization logos, model photos) — runtime content, not source
+/uploads/
+
 # Contains a live SFTP host/username/password for the production deploy target — never commit
 .vscode/sftp.json

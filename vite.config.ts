@@ -23,6 +23,10 @@ export default defineConfig(() => {
           target: `http://localhost:${process.env.AUTH_SERVER_PORT || 4001}`,
           changeOrigin: true,
         },
+        '/uploads': {
+          target: `http://localhost:${process.env.AUTH_SERVER_PORT || 4001}`,
+          changeOrigin: true,
+        },
       },
     },
   };
