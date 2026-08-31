@@ -15,6 +15,7 @@ import { catalogRouter } from './catalogRoutes';
 import { loansRouter } from './loansRoutes';
 import { paymentsRouter } from './paymentsRoutes';
 import { usersRouter } from './usersRoutes';
+import { notificationsRouter } from './notificationsRoutes';
 import { uploadRouter, UPLOADS_DIR } from './uploadRoutes';
 
 const app = express();
@@ -37,6 +38,7 @@ app.use('/api', catalogRouter);
 app.use('/api', loansRouter);
 app.use('/api', paymentsRouter);
 app.use('/api', usersRouter);
+app.use('/api', notificationsRouter);
 app.use('/api', uploadRouter);
 
 function toPublicUser(user: Awaited<ReturnType<typeof findUserByEmail>>) {

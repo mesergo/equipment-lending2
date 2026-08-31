@@ -73,16 +73,20 @@ export function BranchesScreen() {
 
 export function WarehousesScreen() {
   const orgField = useOrgField<Warehouse>();
+  const branchOptions = useOptions('/api/branches', 'name');
   return (
     <EntityTable<Warehouse>
       title="מחסנים"
       apiPath="/api/warehouses"
       fields={[
         ...(orgField ? [orgField] : []),
+        { key: 'branchId', label: 'סניף', type: 'select', options: branchOptions, required: true },
         { key: 'name', label: 'שם', required: true },
         { key: 'location', label: 'מיקום' },
         { key: 'entryCode', label: 'קוד כניסה' },
         { key: 'capacity', label: 'קיבולת', type: 'number' },
+        { key: 'stockQuantity', label: 'מלאי', type: 'number' },
+        { key: 'notes', label: 'הערות' },
       ]}
     />
   );
@@ -140,7 +144,20 @@ export function ProductsScreen() {
             { value: 'returned', label: 'חזר' },
           ],
         },
+        {
+          key: 'status',
+          label: 'סטטוס',
+          type: 'select',
+          options: [
+            { value: 'active', label: 'פעיל' },
+            { value: 'inactive', label: 'לא פעיל' },
+            { value: 'returned_pending_review', label: 'הוחזר, ממתין לאישור נציג' },
+          ],
+        },
         { key: 'price', label: 'מחיר', type: 'number' },
+        { key: 'purchaseDate', label: 'תאריך רכישה', type: 'date' },
+        { key: 'notes', label: 'הערות' },
+        { key: 'dedication', label: 'הקדשה' },
       ]}
     />
   );
@@ -158,6 +175,8 @@ export function CustomersScreen() {
         { key: 'lastName', label: 'שם משפחה', required: true },
         { key: 'idNumber', label: 'ת.ז' },
         { key: 'mobilePhone', label: 'מספר טלפון', required: true },
+        { key: 'additionalPhone', label: 'מספר טלפון נוסף' },
+        { key: 'email', label: 'מייל' },
         { key: 'city', label: 'עיר' },
         { key: 'street', label: 'רחוב' },
         { key: 'buildingNumber', label: 'מספר בנין' },
@@ -176,6 +195,8 @@ export function PaymentsScreen() {
       fields={[
         ...(orgField ? [orgField] : []),
         { key: 'customerId', label: 'לקוח', type: 'select', options: customerOptions, required: true },
+        { key: 'isCashPayment', label: 'תשלום במזומן', type: 'boolean' },
+        { key: 'amount', label: 'סכום ההזמנה', type: 'number' },
         { key: 'chargeAmount', label: 'סכום החיוב', type: 'number' },
         { key: 'chargeReason', label: 'סיבת החיוב' },
         {

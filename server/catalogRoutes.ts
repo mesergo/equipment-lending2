@@ -35,9 +35,9 @@ import type {
 // passes through the same mapping unchanged, since every field lookup below tries the
 // camelCase name first and falls back to the legacy snake_case one.
 
-type LegacyDoc = { id: string; [key: string]: unknown };
+export type LegacyDoc = { id: string; [key: string]: unknown };
 
-function toStr(value: unknown): string | undefined {
+export function toStr(value: unknown): string | undefined {
   return value === null || value === undefined ? undefined : String(value);
 }
 
@@ -46,7 +46,9 @@ function toStr(value: unknown): string | undefined {
 // categories, models, warehouses, customers). Branches, products and loans need a related
 // collection to derive one field (branch manager name, product loan status, loan
 // organizationId), so those are hand-written further down instead of using this factory.
-function wrapLegacyStore<TApp extends { id: string }>(collectionName: string, toApp: (doc: LegacyDoc) => TApp) {
+// Exported so paymentsRoutes.ts (a legacy collection too — see server/paymentsRoutes.ts) can
+// reuse the same pattern instead of duplicating it.
+export function wrapLegacyStore<TApp extends { id: string }>(collectionName: string, toApp: (doc: LegacyDoc) => TApp) {
   const raw = createMongoStore<LegacyDoc>(collectionName, [], legacyIdQuery);
   return {
     readAll: async () => (await raw.readAll()).map(toApp),
@@ -106,11 +108,14 @@ function toWarehouse(doc: LegacyDoc): Warehouse {
   return {
     id: String(doc.id),
     organizationId: String(doc.organizationId ?? doc.organization_id),
+    branchId: String(doc.branchId ?? doc.branch_id),
     name: doc.name as string,
     location: toStr(doc.location),
     entryCode: toStr(doc.entryCode ?? doc.entry_code),
     accessInstructions: toStr(doc.accessInstructions ?? doc.access_directions),
     capacity: (doc.capacity ?? undefined) as number | undefined,
+    stockQuantity: (doc.stockQuantity ?? doc.stock_quantity ?? undefined) as number | undefined,
+    notes: toStr(doc.notes),
     recordingUrl: toStr(doc.recordingUrl ?? doc.recording),
   };
 }
@@ -124,6 +129,8 @@ function toCustomer(doc: LegacyDoc): Customer {
     lastName: (doc.lastName ?? doc.last_name) as string,
     idNumber: toStr(doc.idNumber ?? doc.id_number),
     mobilePhone: (doc.mobilePhone ?? doc.mobile_phone) as string,
+    additionalPhone: toStr(doc.additionalPhone ?? doc.additional_telephone),
+    email: toStr(doc.email),
     city: toStr(doc.city),
     street: toStr(doc.street),
     buildingNumber: toStr(doc.buildingNumber ?? doc.building_number),
@@ -200,6 +207,9 @@ function toProduct(doc: LegacyDoc, loanStatus: ProductLoanStatus): Product {
     status: (doc.status ?? 'active') as ProductStatus,
     loanStatus,
     imageUrl: toStr(doc.imageUrl ?? doc.image),
+    purchaseDate: toStr(doc.purchaseDate ?? doc.purchase_date),
+    notes: toStr(doc.notes),
+    dedication: toStr(doc.dedication),
   };
 }
 

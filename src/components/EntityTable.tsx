@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Pencil, Trash2, Inbox, Upload } from 'lucide-react';
 import { useAuthedFetch } from '../context/AuthContext';
 
-export type FieldType = 'text' | 'number' | 'select' | 'boolean' | 'image';
+export type FieldType = 'text' | 'number' | 'date' | 'select' | 'boolean' | 'image';
 
 export interface FieldConfig<T> {
   key: keyof T & string;
@@ -179,7 +179,7 @@ export default function EntityTable<T extends { id: string }>({ title, apiPath, 
     }
     return (
       <input
-        type={f.type === 'number' ? 'number' : 'text'}
+        type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
         className={inputClass}
         value={formValues[f.key] ?? ''}
         onChange={(e) => setFormValues({ ...formValues, [f.key]: e.target.value })}

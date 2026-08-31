@@ -5,6 +5,7 @@ import { createMongoStore } from './genericStore';
 import { requireAuth, canAccessOrg } from './auth';
 import type { AuthedRequest, AuthTokenPayload } from './auth';
 import { productsStore, organizationsStore, customersStore, loansStore } from './catalogRoutes';
+import { notify } from './notificationsRoutes';
 import type { Loan, LoanStatus, ActionLog, Customer } from '../src/types';
 
 // Loans are the core transaction lendingCRM is built around: a Loan links a Customer to a
@@ -85,6 +86,7 @@ loansRouter.post('/loans', requireAuth, async (req: AuthedRequest, res: Response
     // separate read-modify-write race window.
     await productsStore.update(product.id, { loanStatus: 'loaned' });
     await logAction(organizationId, auth.email, loan.id, `${auth.email} יצר השאלה חדשה, מוצר ${product.name}`);
+    await notify(organizationId, 'השאלה חדשה', `${auth.email} יצר השאלה חדשה עבור ${product.name}`, loan.id);
     res.status(201).json({ item: created });
   } catch (err) {
     res.status(409).json({ error: (err as Error).message });
@@ -126,6 +128,8 @@ loansRouter.patch('/loans/:id', requireAuth, async (req: AuthedRequest, res: Res
   // model — we only special-case the specific transition the live system's flow uses.
   if (patch.status === 'returned') {
     await productsStore.update(existing.productId, { loanStatus: 'not_loaned' });
+    const product = await productsStore.find(existing.productId);
+    await notify(existing.organizationId, 'החזרה הושלמה בהצלחה', `${auth.email} סימן שהמוצר ${product?.name ?? ''} הוחזר`, existing.id);
   }
 
   if (changeDescriptions.length > 0) {
@@ -208,6 +212,7 @@ loansRouter.post('/public/loan-requests', async (req, res) => {
       loan.id,
       `בקשת השאלה ציבורית נוצרה עבור ${product.name}`
     );
+    await notify(organization.id, 'השאלה חדשה', `בקשת השאלה ציבורית התקבלה עבור ${product.name} (${customer.firstName} ${customer.lastName})`, loan.id);
     createdLoans.push(created);
   }
 

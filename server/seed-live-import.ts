@@ -62,13 +62,18 @@ async function main() {
     dubi1: `wh-${randomUUID()}`,
     dubi2: `wh-${randomUUID()}`,
   };
+  // This script predates Warehouse.branchId (added once the real system's branch_id FK was
+  // discovered) and, more importantly, predates pointing MONGODB_URI at the real legacy
+  // database — the `warehouses` collection it writes to is no longer what the app reads from
+  // (that's `equipment_warehouses` now, see catalogRoutes.ts). Kept only as a historical
+  // record of the hand-scraped import; branchId below is a placeholder to satisfy the type.
   const warehouses: Warehouse[] = [
-    { id: wh.telHashomer, organizationId: 'org-shevet-achim', name: 'תל השומר בניין אשפוז מרכזי', location: 'בית כנסת', accessInstructions: accessNote, capacity: 20 },
-    { id: wh.rachel, organizationId: 'org-shevet-achim', name: 'רחל', location: 'משורר 5 פתח תקווה', accessInstructions: accessNote, capacity: 100 },
-    { id: wh.ezerMetzion, organizationId: 'org-shevet-achim', name: 'עזר מציון תל השומר', location: 'ביתן 61 תל השומר', accessInstructions: `${accessNote}. שעות פעילות א-ה 9:00-15:00. מחוץ לשעות הפעילות יש לבדוק אתנו`, capacity: 15 },
-    { id: wh.dana, organizationId: 'org-shevet-achim', name: 'דנה', location: 'ההדר 4 פתח תקווה', accessInstructions: accessNote, capacity: 100 },
-    { id: wh.dubi1, organizationId: 'org-shevet-achim', name: 'דובי', location: 'מנחת שלמה 9 פתח תקווה', accessInstructions: accessNote, capacity: 10 },
-    { id: wh.dubi2, organizationId: 'org-shevet-achim', name: 'דובי', location: 'מנחת שלמה 9 פתח תקווה', accessInstructions: accessNote, capacity: 10 },
+    { id: wh.telHashomer, organizationId: 'org-shevet-achim', branchId: branches[0].id, name: 'תל השומר בניין אשפוז מרכזי', location: 'בית כנסת', accessInstructions: accessNote, capacity: 20 },
+    { id: wh.rachel, organizationId: 'org-shevet-achim', branchId: branches[0].id, name: 'רחל', location: 'משורר 5 פתח תקווה', accessInstructions: accessNote, capacity: 100 },
+    { id: wh.ezerMetzion, organizationId: 'org-shevet-achim', branchId: branches[0].id, name: 'עזר מציון תל השומר', location: 'ביתן 61 תל השומר', accessInstructions: `${accessNote}. שעות פעילות א-ה 9:00-15:00. מחוץ לשעות הפעילות יש לבדוק אתנו`, capacity: 15 },
+    { id: wh.dana, organizationId: 'org-shevet-achim', branchId: branches[0].id, name: 'דנה', location: 'ההדר 4 פתח תקווה', accessInstructions: accessNote, capacity: 100 },
+    { id: wh.dubi1, organizationId: 'org-shevet-achim', branchId: branches[0].id, name: 'דובי', location: 'מנחת שלמה 9 פתח תקווה', accessInstructions: accessNote, capacity: 10 },
+    { id: wh.dubi2, organizationId: 'org-shevet-achim', branchId: branches[0].id, name: 'דובי', location: 'מנחת שלמה 9 פתח תקווה', accessInstructions: accessNote, capacity: 10 },
   ];
   await db.collection<Warehouse>('warehouses').insertMany(warehouses);
 

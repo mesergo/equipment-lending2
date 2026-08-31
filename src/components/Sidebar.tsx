@@ -14,6 +14,7 @@ import {
   Package as LogoIcon,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import NotificationBell from './NotificationBell';
 import type { UserRole } from '../types';
 
 export interface NavItem {
@@ -54,10 +55,11 @@ export default function Sidebar({ current, onNavigate }: { current: string; onNa
         <div className="h-10 w-10 rounded-xl bg-teal-600 flex items-center justify-center shrink-0">
           <LogoIcon className="w-5 h-5 text-white" strokeWidth={2} />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="font-bold text-sm text-gray-900 truncate">lendingCRM</p>
           <p className="text-xs text-gray-400 truncate">מערכת השאלת ציוד</p>
         </div>
+        <NotificationBell />
       </div>
 
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">

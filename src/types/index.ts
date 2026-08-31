@@ -27,11 +27,14 @@ export interface Branch {
 export interface Warehouse {
   id: string;
   organizationId: string;
+  branchId: string;
   name: string;
   location?: string;
   entryCode?: string;
   accessInstructions?: string;
   capacity?: number;
+  stockQuantity?: number; // actual current stock count — distinct from capacity (max size)
+  notes?: string;
   recordingUrl?: string;
 }
 
@@ -52,7 +55,7 @@ export interface Model {
   recordingUrl?: string;
 }
 
-export type ProductStatus = 'active' | 'inactive';
+export type ProductStatus = 'active' | 'inactive' | 'returned_pending_review';
 export type ProductLoanStatus = 'not_loaned' | 'loaned' | 'returned';
 
 export interface Product {
@@ -65,6 +68,9 @@ export interface Product {
   status: ProductStatus;
   loanStatus: ProductLoanStatus;
   imageUrl?: string;
+  purchaseDate?: string; // ISO date
+  notes?: string;
+  dedication?: string; // optional memorial/tribute text tied to this specific unit
 }
 
 export interface Customer {
@@ -74,6 +80,8 @@ export interface Customer {
   lastName: string;
   idNumber?: string; // ת.ז
   mobilePhone: string;
+  additionalPhone?: string;
+  email?: string;
   city?: string;
   street?: string;
   buildingNumber?: string;
@@ -101,13 +109,25 @@ export interface Payment {
   organizationId: string;
   customerId: string;
   wasCharged: boolean;
+  isCashPayment?: boolean; // cash handled outside the clearing company — no clearing id/card digits then
   status: PaymentStatus;
+  amount?: number; // total order value (deposit) — distinct from chargeAmount, what was actually charged/penalized
   chargeAmount?: number;
   chargeReason?: string;
   issueDate?: string;
   date?: string;
   clearingCompanyPaymentId?: string; // no real clearing-company integration yet — data model only
   lastCardDigits?: string;
+}
+
+export interface Notification {
+  id: string;
+  organizationId: string;
+  title: string;
+  body: string;
+  date: string; // ISO datetime
+  read: boolean;
+  loanId?: string;
 }
 
 export interface ActionLog {

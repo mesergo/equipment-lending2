@@ -81,6 +81,7 @@ async function seedOrg(db: Db, seed: OrgSeed) {
   const warehouse: Warehouse = {
     id: `wh-${randomUUID()}`,
     organizationId: seed.orgId,
+    branchId: branch.id,
     name: 'מחסן ראשי',
     location: 'קומת קרקע',
     entryCode: '1234',
