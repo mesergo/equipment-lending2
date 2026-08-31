@@ -53,6 +53,24 @@ export function requireAuth(req: AuthedRequest, res: Response, next: NextFunctio
   }
 }
 
+// Like requireAuth, but never blocks the request — used by routes the public catalog page
+// also calls with no token at all (see catalogRoutes.ts's makeCrud GET handler). If a valid
+// token IS present, req.auth is set so the route can org-scope the response for a logged-in
+// org_manager/coordinator; with no token (or an invalid one), req.auth stays undefined and
+// the route falls back to its public, unfiltered behavior.
+export function optionalAuth(req: AuthedRequest, _res: Response, next: NextFunction): void {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : undefined;
+  if (token) {
+    try {
+      req.auth = verifyToken(token);
+    } catch {
+      // ignore — treat as anonymous rather than failing the request
+    }
+  }
+  next();
+}
+
 // Org-scoping check shared by every entity route: super_admin sees/edits everything;
 // org_manager and coordinator are confined to their own organization.
 export function canAccessOrg(auth: AuthTokenPayload, organizationId: string | undefined): boolean {

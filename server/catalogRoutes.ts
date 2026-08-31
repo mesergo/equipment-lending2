@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { createMongoStore, legacyIdQuery } from './genericStore';
-import { requireAuth, canAccessOrg } from './auth';
+import { requireAuth, optionalAuth, canAccessOrg } from './auth';
 import type { AuthedRequest, AuthTokenPayload } from './auth';
 import { readUsers } from './store';
 import type {
@@ -339,8 +339,16 @@ function makeCrud<T extends { id: string; organizationId: string }>(
   idPrefix: string,
   extraDefaults: Partial<T> = {}
 ) {
-  router.get(path, async (_req, res) => {
-    res.json({ items: await store.readAll() });
+  // optionalAuth, not requireAuth: the public catalog page (no login) calls this same route
+  // for its own organization's products/models/branches, filtering client-side by org token —
+  // that must keep working unfiltered. But a logged-in org_manager/coordinator must NOT see
+  // every organization's data just because the route has no token at all; when a valid token
+  // IS present and the caller isn't super_admin, scope the response to their own org.
+  router.get(path, optionalAuth, async (req: AuthedRequest, res: Response) => {
+    const auth = req.auth;
+    const all = await store.readAll();
+    const visible = !auth || auth.role === 'super_admin' ? all : all.filter((item) => item.organizationId === auth.organizationId);
+    res.json({ items: visible });
   });
 
   router.post(path, requireAuth, async (req: AuthedRequest, res: Response) => {
