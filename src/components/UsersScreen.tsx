@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Pencil, Inbox, UserCog } from 'lucide-react';
 import { useAuth, useAuthedFetch } from '../context/AuthContext';
+import { useOptions } from './CatalogScreens';
 import type { UserRole } from '../types';
 
 interface PublicUser {
@@ -45,9 +46,17 @@ export default function UsersScreen() {
   const [name, setName] = useState('');
   const [role, setRole] = useState<UserRole>('coordinator');
   const [title, setTitle] = useState('');
+  const [organizationId, setOrganizationId] = useState('');
 
   const assignableRoles: UserRole[] =
     currentUser?.role === 'super_admin' ? ['super_admin', 'org_manager', 'coordinator'] : ['org_manager', 'coordinator'];
+
+  // org_manager/coordinator users must belong to an organization; super_admin doesn't. When the
+  // caller is themselves org_manager, the backend always forces their own org regardless of what's
+  // sent (see server/usersRoutes.ts), so this selector is only needed — and only shown — for
+  // super_admin, who has no organization of their own to fall back on.
+  const organizationOptions = useOptions('/api/organizations', 'name');
+  const needsOrganization = currentUser?.role === 'super_admin' && role !== 'super_admin';
 
   async function load() {
     setLoading(true);
@@ -71,13 +80,25 @@ export default function UsersScreen() {
     setName('');
     setRole(assignableRoles[assignableRoles.length - 1]);
     setTitle('');
+    setOrganizationId('');
   }
 
   async function submitCreate() {
     setError(null);
+    if (needsOrganization && !organizationId) {
+      setError('יש לבחור ארגון');
+      return;
+    }
     const res = await authedFetch('/api/users', {
       method: 'POST',
-      body: JSON.stringify({ email, password, name, role, title: title || undefined }),
+      body: JSON.stringify({
+        email,
+        password,
+        name,
+        role,
+        title: title || undefined,
+        organizationId: needsOrganization ? organizationId : undefined,
+      }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -154,6 +175,19 @@ export default function UsersScreen() {
               <label className="block text-xs font-medium text-gray-500 mb-1">תפקיד/תיאור</label>
               <input type="text" className={inputClass} value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
+            {creating && needsOrganization && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">ארגון</label>
+                <select className={inputClass} value={organizationId} onChange={(e) => setOrganizationId(e.target.value)}>
+                  <option value="">— בחר —</option>
+                  {organizationOptions.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">{creating ? 'סיסמה' : 'סיסמה חדשה (אופציונלי)'}</label>
               <input type="password" className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} />
