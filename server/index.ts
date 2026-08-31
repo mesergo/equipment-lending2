@@ -54,7 +54,9 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   const user = await findUserByEmail(String(email));
-  if (!user || !bcrypt.compareSync(String(password), user.passwordHash)) {
+  const passwordMatches = user ? bcrypt.compareSync(String(password), user.passwordHash) : false;
+
+  if (!user || !passwordMatches) {
     res.status(401).json({ error: 'כתובת דואר אלקטרוני או סיסמה שגויים' });
     return;
   }
