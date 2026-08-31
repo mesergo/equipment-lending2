@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { createMongoStore } from './genericStore';
 import { requireAuth, canAccessOrg } from './auth';
 import type { AuthedRequest, AuthTokenPayload } from './auth';
-import { productsStore, organizationsStore, customersStore } from './catalogRoutes';
+import { productsStore, organizationsStore, customersStore, loansStore } from './catalogRoutes';
 import type { Loan, LoanStatus, ActionLog, Customer } from '../src/types';
 
 // Loans are the core transaction lendingCRM is built around: a Loan links a Customer to a
@@ -14,8 +14,11 @@ import type { Loan, LoanStatus, ActionLog, Customer } from '../src/types';
 //  2. ActionLog — an auto-written audit trail entry, shown inline in the loan edit form on
 //     the live system ("מנהל ארגון X עדכן... תאריך... סטטוס...").
 // Unlike catalog entities, coordinators CAN create/update loans — that's their job.
+//
+// loansStore itself lives in catalogRoutes.ts (reads the real `lendings` collection) — it's
+// defined there because computing Product.loanStatus also needs the raw lendings data, and
+// that avoids a circular import between this file and catalogRoutes.ts.
 
-export const loansStore = createMongoStore<Loan>('loans');
 const actionLogsStore = createMongoStore<ActionLog>('actionlogs');
 
 async function logAction(organizationId: string, performedBy: string, loanId: string, notes: string) {
